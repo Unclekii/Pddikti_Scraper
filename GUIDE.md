@@ -1,62 +1,49 @@
-# 📘 PANDUAN LENGKAP: PDDikti Dashboard & Scraper Dosen
+# 📘 PANDUAN: Cara Menjalankan PDDikti Dashboard & Scraper Dosen
 
-Panduan ini disusun untuk siapa saja, bahkan bagi Anda yang **tidak memiliki pengalaman coding** atau tidak punya aplikasi khusus (seperti VS Code/PyCharm). Cukup gunakan apa yang sudah ada di laptop Anda!
+Selamat! Anda telah mendapatkan salinan proyek **PDDikti Dashboard**. Panduan ini dibuat agar siapa pun, bahkan yang **tidak mengerti coding**, bisa menjalankannya dengan mudah di laptop sendiri.
 
 ---
 
-## 🛑 1. Persiapan Awal (Hanya Sekali)
-Sebelum bisa menjalankan program, laptop Anda harus sudah memiliki "mesin" Python.
+## 🛠️ 1. Persiapan Awal (Hanya Sekali)
+Agar program berjalan, laptop anda membutuhkan "mesin" bernama **Python**.
 
-### Cara Instal Python (Paling Mudah):
 1.  Buka **Microsoft Store** di Windows Anda.
 2.  Cari **"Python 3.11"** atau versi terbaru.
 3.  Klik **Install/Get**. Selesai!
-    *Alternatif: Download dari [python.org](https://www.python.org/downloads/) dan pastikan centang opsi **"Add Python to PATH"** saat instalasi.*
+    *(Alternatif: Download dari [python.org](https://www.python.org/downloads/) dan pastikan centang opsi **"Add Python to PATH"** saat instalasi).*
 
 ---
 
-## 🚀 2. Cara Menjalankan Program (Local Laptop)
-Gunakan cara ini jika file ada di harddisk laptop Anda.
+## 🚀 2. Cara Menjalankan Program (Sangat Mudah!)
 
-1.  **Buka Folder Proyek**: Buka folder tempat Anda menyimpan file-file ini.
-2.  **Klik 2x File `start.bat`**: Cari file yang ikonnya seperti "roda gigi" atau bernama `start`.
-    *   Sebuah jendela hitam (Terminal) akan muncul. 
-    *   **TUNGGU** sampai proses instalasi selesai (hanya di awal).
-    *   Jika sudah muncul tulisan **"Buka browser: http://localhost:5000"**, berarti program sudah aktif.
-3.  **Buka Browser**: Ketik alamat **`http://localhost:5000`** di Chrome atau Edge.
-4.  **DILARANG MENUTUP JENDELA HITAM**: Selama Anda memakai website dashboard, jendela hitam tadi harus tetap terbuka. Jika ditutup, website akan mati.
+1.  **Download File**: Jika Anda mendapatkan ini dari GitHub, klik tombol hijau **Code** lalu pilih **Download ZIP**. Ekstrak (unzip) folder tersebut.
+2.  **Klik 2x File `start.bat`**: Cari file bernama `start` (ikon roda gigi) di dalam folder tadi.
+    -   Jendela hitam (Terminal) akan muncul. 
+    -   **TUNGGU** sebentar, program sedang mendownload kebutuhan sistem secara otomatis.
+    -   Jika muncul tulisan hijau **`READY`** dan alamat **`http://localhost:5000`**, berarti sudah aktif.
+3.  **Buka Browser**: Buka Chrome/Edge, lalu ketik: **`localhost:5000`** di alamat atas.
+4.  **Selesai!** Dashboard siap digunakan untuk mengambil data dosen.
 
----
-
-## ☁️ 3. Cara Menjalankan di Google Colab (Tanpa Instal ke Laptop)
-Jika Anda ingin menjalankan program lewat internet tanpa instal apa pun di laptop:
-
-1.  Upload seluruh folder ini ke **Google Drive** Anda.
-2.  Buka [Google Colab](https://colab.research.google.com/).
-3.  Klik **File > Upload Notebook** dan pilih file **`Run_on_Colab.ipynb`** yang sudah saya sediakan di folder ini.
-4.  Ikuti petunjuk di dalam notebook tersebut untuk mendapatkan "Link Publik" agar bisa membuka Dashboard.
+> [!IMPORTANT]
+> **DILARANG MENUTUP JENDELA HITAM**: Selama Anda menggunakan website dashboard, jendela hitam tadi harus tetap terbuka. Jika ditutup, website akan mati.
 
 ---
 
-## 🖥️ 4. Cara Menggunakan Dashboard (Langkah User)
-1.  **Update Data**: Klik tombol **"Fetch Data Prodi"** untuk menyegarkan daftar jurusan dari PDDikti.
-2.  **Pilih Jurusan**: Cari nama jurusan (misal: "Hukum") lalu centang kotak di sampingnya. Anda bisa pilih banyak sekaligus!
-3.  **Jalankan Scraper**: Klik tombol biru **"Jalankan Scraper"**.
-4.  **Lihat Log**: Pantau proses di bagian bawah. Tunggu sampai tertulis "Done" atau selesai.
-5.  **Download Hasil**: Hasilnya berupa file Excel bisa didownload melalui tabel yang muncul di bagian bawah website.
+## 🖥️ 3. Cara Menggunakan Dashboard
+1.  **Cari & Pilih Jurusan**: Ketik nama jurusan (misal: "Hukum") di kolom pencarian, lalu centang kotak di sampingnya. Anda bisa pilih banyak sekaligus!
+2.  **Jalankan Scraper**: Klik tombol biru **"Jalankan Scraper"**.
+3.  **Tunggu Proses**: Pantau proses pengambilan data di layar. Tunggu sampai selesai.
+4.  **Download Hasil**: Hasil akhir berupa file Excel bisa langsung didownload melalui tabel yang muncul di bagian bawah website.
 
 ---
 
-## ⚠️ 5. Tanya Jawab (Troubleshooting)
+## ⚠️ 4. Tanya Jawab (Jika Ada Masalah)
 
 **Q: Jendela hitam muncul lalu langsung menghilang!**
-*   **A:** Berarti ada masalah di Python Anda. Coba klik kanan file `start.bat` lalu pilih "Edit". Pastikan Python sudah terinstal dengan benar.
+- **A:** Kemungkinan besar Python belum terinstall atau belum di-set ke "PATH". Pastikan Anda sudah mengikuti langkah nomor 1 di atas.
 
-**Q: Saya tidak melihat folder 'output'!**
-*   **A:** Folder `output` akan terbuat secara otomatis saat pertama kali Anda melakukan scraping.
-
-**Q: Apakah data saya aman?**
-*   **A:** Aman. Program ini hanya membaca data publik dari website PDDikti dan menyimpannya di laptop Anda sendiri.
+**Q: Saya mau update kodenya gimana?**
+- **A:** Cukup download versi terbaru dari link GitHub yang diberikan, lalu ganti folder lama dengan yang baru.
 
 ---
-*Dibuat untuk memudahkan Anda dalam pengumpulan data dosen.*
+*Dibuat untuk memudahkan pengumpulan data dosen dari PDDikti secara otomatis.*
