@@ -29,7 +29,27 @@ Agar program berjalan, laptop anda membutuhkan "mesin" bernama **Python**.
 
 ---
 
-## 🖥️ 3. Cara Menggunakan Dashboard
+## ☁️ 3. Alternatif: Tanpa Install (Via GitHub Codespaces)
+Jika Anda tidak mau menginstal Python atau sekadar menumpang laptop, Anda bisa menjalankan program ini langsung dari *Browser* (gratis):
+
+1.  Buka link repository GitHub proyek ini.
+2.  Klik tombol hijau **`<> Code`**.
+3.  Pilih tab **`Codespaces`**, lalu klik tombol biru **`Create codespaces on main`**.
+4.  Tunggu sebentar hingga muncul tampilan "Visual Studio Code" di dalam browser.
+5.  Di jendela terminal (layar hitam di bawah), ketik perintah ini lalu tekan **Enter**:
+    ```bash
+    pip install -r requirements.txt
+    ```
+6.  Tunggu proses instalasi selesai, lalu ketik perintah ini dan tekan **Enter**:
+    ```bash
+    python app.py
+    ```
+7.  Akan muncul notifikasi di pojok kanan bawah, klik **"Open in Browser"**.
+8.  Selesai! Dashboard terbuka pada tab baru.
+
+---
+
+## 🖥️ 4. Cara Menggunakan Dashboard
 1.  **Cari & Pilih Jurusan**: Ketik nama jurusan (misal: "Hukum") di kolom pencarian, lalu centang kotak di sampingnya. Anda bisa pilih banyak sekaligus!
 2.  **Jalankan Scraper**: Klik tombol biru **"Jalankan Scraper"**.
 3.  **Tunggu Proses**: Pantau proses pengambilan data di layar. Tunggu sampai selesai.
@@ -37,7 +57,7 @@ Agar program berjalan, laptop anda membutuhkan "mesin" bernama **Python**.
 
 ---
 
-## ⚠️ 4. Tanya Jawab (Jika Ada Masalah)
+## ⚠️ 5. Tanya Jawab (Jika Ada Masalah)
 
 **Q: Jendela hitam muncul lalu langsung menghilang!**
 - **A:** Kemungkinan besar Python belum terinstall atau belum di-set ke "PATH". Pastikan Anda sudah mengikuti langkah nomor 1 di atas.
