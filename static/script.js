@@ -386,12 +386,30 @@ async function loadHistory() {
           <div class="history-name">${f.name}</div>
           <div class="history-meta">${sizeMB} MB · ${date}</div>
         </div>
-        <a class="btn btn-sm btn-ghost" href="/api/download/${f.name}">⬇️ Download</a>
+        <div style="display: flex; gap: 8px;">
+          <a class="btn btn-sm btn-ghost" href="/api/download/${f.name}" title="Download File">⬇️</a>
+          <button class="btn btn-sm btn-ghost" onclick="deleteHistoryFile('${f.name}')" style="color: #e74c3c;" title="Hapus File">🗑️</button>
+        </div>
       `;
       container.appendChild(item);
     });
   } catch (e) {
     container.innerHTML = '<p class="text-muted small">Gagal memuat riwayat.</p>';
+  }
+}
+
+async function deleteHistoryFile(filename) {
+  if (!confirm(`Apakah Anda yakin ingin menghapus file "${filename}"?`)) return;
+  try {
+    const res = await fetch(`/api/delete-file/${filename}`, { method: 'DELETE' });
+    const json = await res.json();
+    if (json.success) {
+      loadHistory(); // refresh list
+    } else {
+      alert('Gagal menghapus: ' + json.error);
+    }
+  } catch (e) {
+    alert('Terjadi kesalahan saat menghapus file.');
   }
 }
 

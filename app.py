@@ -76,15 +76,20 @@ def api_stream(job_id):
     q = JOBS[job_id]["queue"]
 
     def generate():
-        yield "data: {\"type\": \"connected\"}\n\n"
-        while True:
-            try:
-                msg = q.get(timeout=60)
-                if msg is None:
-                    break
-                yield f"data: {json.dumps(msg)}\n\n"
-            except queue.Empty:
-                yield "data: {\"type\": \"heartbeat\"}\n\n"
+        try:
+            yield "data: {\"type\": \"connected\"}\n\n"
+            while True:
+                try:
+                    msg = q.get(timeout=60)
+                    if msg is None:
+                        break
+                    yield f"data: {json.dumps(msg)}\n\n"
+                except queue.Empty:
+                    yield "data: {\"type\": \"heartbeat\"}\n\n"
+        finally:
+            # Clean up tracking dictionary to prevent Memory Leak
+            if job_id in JOBS:
+                del JOBS[job_id]
 
     return Response(
         generate(),
@@ -113,6 +118,20 @@ def api_outputs():
 def api_download(filename):
     """Download an output Excel file."""
     return send_from_directory(OUTPUT_DIR, filename, as_attachment=True)
+
+
+@app.route("/api/delete-file/<filename>", methods=["DELETE"])
+def api_delete_file(filename):
+    """Delete an output Excel file."""
+    if ".." in filename or "/" in filename or "\\" in filename:
+        return jsonify({"success": False, "error": "Invalid filename"}), 400
+    try:
+        fp = os.path.join(OUTPUT_DIR, filename)
+        if os.path.exists(fp):
+            os.remove(fp)
+        return jsonify({"success": True})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
 
 
 if __name__ == "__main__":
