@@ -102,13 +102,15 @@ def api_stream(job_id):
 def api_outputs():
     """List output Excel files."""
     files = []
+    if not os.path.exists(OUTPUT_DIR):
+        return jsonify([])
     for f in os.listdir(OUTPUT_DIR):
         if f.endswith(".xlsx"):
             fp = os.path.join(OUTPUT_DIR, f)
             files.append({
                 "name": f,
                 "size": os.path.getsize(fp),
-                "modified": os.path.getmtime(fp),
+                "modified": os.path.getmtime(fp)
             })
     files.sort(key=lambda x: x["modified"], reverse=True)
     return jsonify(files)
@@ -122,13 +124,19 @@ def api_download(filename):
 
 @app.route("/api/delete-file/<filename>", methods=["DELETE"])
 def api_delete_file(filename):
-    """Delete an output Excel file."""
+    """Delete an output Excel file and its corresponding JSON stats."""
     if ".." in filename or "/" in filename or "\\" in filename:
         return jsonify({"success": False, "error": "Invalid filename"}), 400
     try:
         fp = os.path.join(OUTPUT_DIR, filename)
         if os.path.exists(fp):
             os.remove(fp)
+            
+        # Delete corresponding json if exists
+        json_fp = os.path.join(OUTPUT_DIR, filename.replace(".xlsx", ".json"))
+        if os.path.exists(json_fp):
+            os.remove(json_fp)
+            
         return jsonify({"success": True})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500

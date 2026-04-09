@@ -13,6 +13,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
+import collections
 
 BASE_URL = "https://api-pddikti.kemdiktisaintek.go.id"
 HEADERS = {
@@ -412,7 +413,9 @@ def export_to_excel(profiles, prodi_list, semester, output_dir, cb):
     filepath = os.path.join(output_dir, filename)
     os.makedirs(output_dir, exist_ok=True)
     wb.save(filepath)
-    cb(f"\n✅ File Excel disimpan: {filename}")
+    
+    # Selesai
+    cb(f"✅ File Excel disimpan: {filename}")
     return filename
 
 

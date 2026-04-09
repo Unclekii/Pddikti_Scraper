@@ -1,12 +1,39 @@
 // ═══════════════════════════════════════════
-//  PDDikti Dashboard — Frontend Script
+//  APEX Dashboard — Premium Frontend Script
 // ═══════════════════════════════════════════
 
-let allProdi = [];          // full prodi list from API
-let filteredProdi = [];     // currently visible (after search/filter)
-let selectedProdi = new Set(); // selected prodi names
+let allProdi = [];          
+let filteredProdi = [];     
+let selectedProdi = new Set(); 
 let currentBidang = 'semua';
 let activeEventSource = null;
+
+// ──────────────────────────────────────────
+// TABS & NAVIGATION
+// ──────────────────────────────────────────
+function switchTab(tabId) {
+  // Update UI State
+  document.querySelectorAll('.view-section').forEach(el => el.style.display = 'none');
+  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+
+  const targetView = document.getElementById(`view-${tabId}`);
+  if (targetView) targetView.style.display = 'block';
+
+  const targetBtn = document.getElementById(`tab-${tabId}`);
+  if (targetBtn) targetBtn.classList.add('active');
+
+  // Update Header Text
+  const title = document.getElementById('page-title');
+  const subtitle = document.getElementById('page-subtitle');
+  
+  if (tabId === 'scraping') {
+    title.textContent = 'Home Scraping';
+    subtitle.textContent = 'Kelola pengambilan data program studi dan dosen.';
+  } else if (tabId === 'history') {
+    title.textContent = 'Output Archive';
+    subtitle.textContent = 'Akses file excel yang sudah dihasilkan.';
+  }
+}
 
 // ──────────────────────────────────────────
 // STEP 1: Fetch Prodi
@@ -14,85 +41,62 @@ let activeEventSource = null;
 async function fetchProdi() {
   const btn = document.getElementById('btn-fetch');
   const btnText = document.getElementById('fetch-btn-text');
-  const btnIcon = document.getElementById('fetch-btn-icon');
   const status = document.getElementById('fetch-status');
 
   btn.disabled = true;
-  btnIcon.innerHTML = '<span class="spinner"></span>';
-  btnText.textContent = 'Mengambil data...';
-  setStatus(status, 'running', '⏳ Mengambil dari PDDikti...');
+  btnText.textContent = 'Synchronizing...';
+  setStatus(status, 'running', '⏳ Syncing with PDDikti API...');
 
   try {
     const res = await fetch('/api/fetch-prodi');
     const json = await res.json();
-
     if (!json.success) throw new Error(json.error);
 
     allProdi = json.data;
     filteredProdi = [...allProdi];
-
-    setStatus(status, 'success', `✅ ${json.total} prodi ditemukan`);
-
+    setStatus(status, 'success', `Katalog Prodi Terkini (${json.total})`);
     renderBidangFilters();
     renderProdiList();
     loadHistory();
   } catch (err) {
-    setStatus(status, 'error', `❌ Error: ${err.message}`);
+    setStatus(status, 'error', `Sync Gagal: ${err.message}`);
   } finally {
     btn.disabled = false;
-    btnIcon.textContent = '🔍';
-    btnText.textContent = 'Fetch Ulang';
+    btnText.textContent = 'Fetch Ulang Katalog';
+    if (window.lucide) lucide.createIcons();
   }
 }
 
-// ──────────────────────────────────────────
-// Render Bidang Filter Pills
-// ──────────────────────────────────────────
 function renderBidangFilters() {
   const container = document.getElementById('bidang-filters');
   const bidangSet = new Set(allProdi.map(p => p.bidang));
-
-  container.innerHTML = '<span class="filter-label">Filter Bidang:</span>';
+  container.innerHTML = '';
   container.style.display = 'flex';
-
-  const allPill = makePill('Semua', 'semua', true);
+  
+  const allPill = document.createElement('button');
+  allPill.className = 'pill-modern' + (currentBidang === 'semua' ? ' active' : '');
+  allPill.textContent = 'Semua Bidang';
+  allPill.onclick = () => filterBidang('semua', allPill);
   container.appendChild(allPill);
 
   bidangSet.forEach(bidang => {
-    const pill = makePill(bidang, bidang, false);
+    const pill = document.createElement('button');
+    pill.className = 'pill-modern' + (currentBidang === bidang ? ' active' : '');
+    pill.textContent = bidang;
+    pill.onclick = () => filterBidang(bidang, pill);
     container.appendChild(pill);
   });
 }
 
-function makePill(label, bidang, isActive) {
-  const btn = document.createElement('button');
-  btn.className = 'pill' + (isActive ? ' pill-active' : '');
-  btn.dataset.bidang = bidang;
-  btn.textContent = label;
-  btn.onclick = () => filterBidang(bidang, btn);
-  return btn;
-}
-
 function filterBidang(bidang, el) {
   currentBidang = bidang;
-  document.querySelectorAll('.pill').forEach(p => p.classList.remove('pill-active'));
-  el.classList.add('pill-active');
-  
-  // Reset pencarian saat pindah bidang agar tidak membingungkan
-  const searchInput = document.getElementById('search-input');
-  if (searchInput) {
-    searchInput.value = '';
-  }
-  
+  document.querySelectorAll('.pill-modern').forEach(p => p.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('search-input').value = '';
   applyFilters();
 }
 
-// ──────────────────────────────────────────
-// Search + Bidang Filter
-// ──────────────────────────────────────────
-function filterList() {
-  applyFilters();
-}
+function filterList() { applyFilters(); }
 
 function applyFilters() {
   const q = document.getElementById('search-input').value.trim().toLowerCase();
@@ -104,33 +108,39 @@ function applyFilters() {
   renderProdiList();
 }
 
-// ──────────────────────────────────────────
-// Render Prodi List
-// ──────────────────────────────────────────
 function renderProdiList() {
   const container = document.getElementById('prodi-list');
-  const totalEl = document.getElementById('total-count');
-
-  totalEl.textContent = `Menampilkan ${filteredProdi.length} dari ${allProdi.length} prodi`;
-
   if (filteredProdi.length === 0) {
-    container.innerHTML = `<div class="empty-state"><span>🔍</span><p>Tidak ada prodi yang cocok</p></div>`;
+    container.innerHTML = `<div class="empty-state">No matching found</div>`;
     return;
   }
-
-  const fragment = document.createDocumentFragment();
+  container.innerHTML = '';
   filteredProdi.forEach(p => {
+    const isChecked = selectedProdi.has(p.nama_prodi);
     const item = document.createElement('div');
-    item.className = 'prodi-item' + (selectedProdi.has(p.nama_prodi) ? ' checked' : '');
-    item.dataset.nama = p.nama_prodi;
+    item.className = 'prodi-item' + (isChecked ? ' checked' : '');
+    
+    // Custom Checkbox Structure with static SVG for instant performance
+    const customCb = document.createElement('div');
+    customCb.className = 'custom-cb';
+    customCb.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>`;
+    
+    const nameEl = document.createElement('span');
+    nameEl.className = 'prodi-name';
+    nameEl.textContent = p.nama_prodi;
 
-    const cb = document.createElement('input');
-    cb.type = 'checkbox';
-    cb.checked = selectedProdi.has(p.nama_prodi);
+    const bTag = document.createElement('span');
+    bTag.className = 'bidang-tag-prodi';
+    bTag.style.marginLeft = 'auto';
+    bTag.textContent = p.bidang;
 
-    // onchange handles the Set update — works whether user clicks checkbox OR row
-    cb.onchange = () => {
-      if (cb.checked) {
+    item.appendChild(customCb);
+    item.appendChild(nameEl);
+    item.appendChild(bTag);
+    
+    item.onclick = () => {
+      const currentlyChecked = selectedProdi.has(p.nama_prodi);
+      if (!currentlyChecked) {
         selectedProdi.add(p.nama_prodi);
         item.classList.add('checked');
       } else {
@@ -138,317 +148,224 @@ function renderProdiList() {
         item.classList.remove('checked');
       }
       updateCountBadge();
-      updateRunButton();
+      renderSelectedSummary();
     };
-
-    // Clicking anywhere on the row toggles the checkbox
-    item.onclick = (e) => {
-      if (e.target === cb) return; // checkbox handles itself via onchange
-      cb.checked = !cb.checked;
-      cb.dispatchEvent(new Event('change'));
-    };
-
-    const nameEl = document.createElement('span');
-    nameEl.className = 'prodi-name';
-    nameEl.textContent = p.nama_prodi;
-
-    const bidangEl = document.createElement('span');
-    bidangEl.className = 'prodi-bidang';
-    bidangEl.textContent = p.bidang;
-
-    item.appendChild(cb);
-    item.appendChild(nameEl);
-    item.appendChild(bidangEl);
-    fragment.appendChild(item);
+    
+    container.appendChild(item);
   });
-
-  container.innerHTML = '';
-  container.appendChild(fragment);
   updateCountBadge();
-}
-
-function updateCountBadge() {
-  const count = selectedProdi.size;
-  document.getElementById('count-badge').textContent = `${count} terpilih`;
   renderSelectedSummary();
-}
-
-/**
- * Render chips/tags for selected prodi
- */
-function renderSelectedSummary() {
-  const container = document.getElementById('selected-summary');
-  const tagsContainer = document.getElementById('selected-tags');
-  
-  if (selectedProdi.size === 0) {
-    container.style.display = 'none';
-    tagsContainer.innerHTML = '';
-    return;
-  }
-
-  container.style.display = 'flex';
-  tagsContainer.innerHTML = '';
-
-  selectedProdi.forEach(name => {
-    const tag = document.createElement('div');
-    tag.className = 'prodi-tag';
-    
-    const label = document.createElement('span');
-    label.textContent = name;
-    
-    const removeBtn = document.createElement('span');
-    removeBtn.className = 'prodi-tag-remove';
-    removeBtn.innerHTML = '&times;';
-    removeBtn.title = `Hapus ${name}`;
-    removeBtn.onclick = (e) => {
-      e.stopPropagation();
-      selectedProdi.delete(name);
-      
-      // Safely find the checkbox by iterating DOM (avoid selector injection issues)
-      document.querySelectorAll('.prodi-item').forEach(item => {
-        if (item.dataset.nama === name) {
-          const cb = item.querySelector('input[type="checkbox"]');
-          if (cb) cb.checked = false;
-          item.classList.remove('checked');
-        }
-      });
-      
-      updateCountBadge();
-      updateRunButton();
-    };
-
-    tag.appendChild(label);
-    tag.appendChild(removeBtn);
-    tagsContainer.appendChild(tag);
-  });
-}
-
-
-function updateRunButton() {
-  const btn = document.getElementById('btn-run');
-  const status = document.getElementById('run-status');
-  if (selectedProdi.size === 0) {
-    btn.disabled = true;
-    setStatus(status, '', 'Pilih prodi terlebih dahulu');
-  } else {
-    btn.disabled = false;
-    setStatus(status, 'success', `✅ ${selectedProdi.size} prodi siap di-scrape`);
-  }
 }
 
 function selectAll() {
   filteredProdi.forEach(p => selectedProdi.add(p.nama_prodi));
   renderProdiList();
-  updateRunButton();
 }
 
 function clearAll() {
   selectedProdi.clear();
   renderProdiList();
-  updateRunButton();
+}
+
+function renderSelectedSummary() {
+  const container = document.getElementById('selected-summary');
+  const tagsContainer = document.getElementById('selected-tags');
+  if (selectedProdi.size === 0) {
+    container.style.display = 'none';
+    return;
+  }
+  container.style.display = 'block';
+  tagsContainer.innerHTML = '';
+  selectedProdi.forEach(name => {
+    const tag = document.createElement('div');
+    tag.style = "background: rgba(63, 94, 251, 0.1); border: 1px solid var(--accent-blue); color: var(--accent-blue); padding: 4px 10px; border-radius: 50px; font-size: 11px; display: flex; align-items: center; gap: 6px; font-weight: 500;";
+    tag.innerHTML = `<span>${name}</span><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="cursor:pointer;" onclick="event.stopPropagation(); selectedProdi.delete('${name}'); renderProdiList();"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>`;
+    tagsContainer.appendChild(tag);
+  });
+}
+
+function updateCountBadge() {
+  document.getElementById('count-badge').textContent = selectedProdi.size;
+  const btn = document.getElementById('btn-run');
+  btn.disabled = selectedProdi.size === 0;
+  setStatus(document.getElementById('run-status'), selectedProdi.size > 0 ? 'success' : '', selectedProdi.size > 0 ? `${selectedProdi.size} target selected` : 'Select target to start');
 }
 
 // ──────────────────────────────────────────
-// STEP 3: Run Scraper
+// SCRAPER EXECUTION
 // ──────────────────────────────────────────
 async function runScraper() {
   if (selectedProdi.size === 0) return;
-
   const btn = document.getElementById('btn-run');
   const status = document.getElementById('run-status');
   const logWrapper = document.getElementById('log-wrapper');
   const logBox = document.getElementById('log-box');
-  const dlSection = document.getElementById('download-section');
-
-  // Reset
+  
   btn.disabled = true;
   logWrapper.style.display = 'block';
-  dlSection.style.display = 'none';
   logBox.innerHTML = '';
-  setStatus(status, 'running', '⏳ Menginisiasi scraping...');
-
-  appendLog(`🚀 Memulai scraping untuk ${selectedProdi.size} keyword prodi...`);
-  appendLog(`Keyword: ${[...selectedProdi].slice(0, 5).join(', ')}${selectedProdi.size > 5 ? '...' : ''}`);
-  appendLog('─'.repeat(55));
-
-  // Close previous SSE if any
-  if (activeEventSource) activeEventSource.close();
+  setStatus(status, 'running', 'Initializing engine...');
 
   try {
-    // Start job
     const res = await fetch('/api/run-scraper', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ prodi: [...selectedProdi] }),
     });
     const json = await res.json();
+    if (!json.success) throw new Error(json.error);
 
-    if (!json.success) {
-      appendLog('❌ Error: ' + json.error, 'error');
-      setStatus(status, 'error', '❌ Gagal memulai');
-      btn.disabled = false;
-      return;
-    }
-
-    const jobId = json.job_id;
-
-    // Connect SSE
-    activeEventSource = new EventSource(`/api/stream/${jobId}`);
+    if (activeEventSource) activeEventSource.close();
+    activeEventSource = new EventSource(`/api/stream/${json.job_id}`);
 
     activeEventSource.onmessage = (e) => {
       const data = JSON.parse(e.data);
-
-      if (data.type === 'heartbeat' || data.type === 'connected') return;
-
-      if (data.type === 'log') {
-        const msg = data.message;
-        let cls = '';
-        if (msg.includes('STEP') && msg.includes('=')) cls = 'step';
-        else if (msg.includes('❌')) cls = 'error';
-        else if (msg.includes('🎉') || msg.includes('✅ File')) cls = 'done';
-        appendLog(msg, cls);
-      }
-
+      if (data.type === 'log') appendLog(data.message);
       if (data.type === 'done') {
-        setStatus(status, 'success', '✅ Selesai!');
-        appendLog('\n🎉 SCRAPING SELESAI!', 'done');
+        setStatus(status, 'success', 'Scraping Process Completed');
         showDownload(data.filename);
-        btn.disabled = false;
         activeEventSource.close();
         loadHistory();
       }
-
       if (data.type === 'error') {
-        setStatus(status, 'error', '❌ ' + data.message);
-        appendLog('❌ ERROR: ' + data.message, 'error');
-        btn.disabled = false;
+        setStatus(status, 'error', `Failure: ${data.message}`);
         activeEventSource.close();
       }
     };
-
-    activeEventSource.onerror = () => {
-      if (activeEventSource.readyState === EventSource.CLOSED) return;
-      appendLog('⚠️ Koneksi SSE terputus. Proses mungkin masih berjalan.', 'error');
-      btn.disabled = false;
-    };
-
   } catch (err) {
-    appendLog('❌ Error: ' + err.message, 'error');
-    setStatus(status, 'error', '❌ Gagal');
+    appendLog('❌ Error: ' + err.message);
     btn.disabled = false;
   }
 }
 
-function appendLog(text, cls = '') {
+function appendLog(text) {
   const logBox = document.getElementById('log-box');
-  const line = document.createElement('p');
-  line.className = 'log-line' + (cls ? ' ' + cls : '');
-  // Clean ANSI escape sequences if any
-  line.textContent = text.replace(/\x1B\[[0-9;]*m/g, '');
-  logBox.appendChild(line);
+  const p = document.createElement('p');
+  p.className = 'log-line';
+  p.textContent = text;
+  logBox.appendChild(p);
   logBox.scrollTop = logBox.scrollHeight;
 }
 
-function clearLog() {
-  document.getElementById('log-box').innerHTML = '';
-}
-
 function showDownload(filename) {
-  const section = document.getElementById('download-section');
-  const dlBtn = document.getElementById('dl-btn');
-  const dlFilename = document.getElementById('dl-filename');
-  dlFilename.textContent = filename;
-  dlBtn.href = `/api/download/${filename}`;
+  const section = document.getElementById('download-section-history');
   section.style.display = 'block';
-  section.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  document.getElementById('dl-filename').textContent = filename;
+  document.getElementById('dl-btn').href = `/api/download/${filename}`;
+  switchTab('history');
 }
 
 // ──────────────────────────────────────────
-// History
+// HELPERS & HISTORY
 // ──────────────────────────────────────────
 async function loadHistory() {
   const container = document.getElementById('history-list');
+  const totalCountEl = document.getElementById('total-files-count');
+  const totalSizeEl = document.getElementById('total-files-size');
+  const lastSyncEl = document.getElementById('last-sync-date');
+  const archiveCountEl = document.getElementById('archive-count');
+
   try {
     const res = await fetch('/api/outputs');
     const files = await res.json();
-    if (files.length === 0) {
-      container.innerHTML = '<p class="text-muted small">Belum ada file output.</p>';
-      return;
+    
+    // Calculate Stats
+    let totalSize = 0;
+    let lastModified = 0;
+    files.forEach(f => {
+      totalSize += f.size;
+      if (f.modified > lastModified) lastModified = f.modified;
+    });
+
+    // Update Summary Elements
+    if (totalCountEl) totalCountEl.textContent = files.length;
+    if (totalSizeEl) totalSizeEl.textContent = (totalSize / 1024).toFixed(1) + ' KB';
+    if (lastSyncEl) lastSyncEl.textContent = lastModified ? new Date(lastModified * 1000).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }) : '-';
+    if (archiveCountEl) archiveCountEl.textContent = `${files.length} FILES`;
+
+    if (!files.length) { 
+      container.innerHTML = '<div style="text-align:center; padding: 40px; color: var(--text-dim);">Archive is empty</div>'; 
+      return; 
     }
+    
     container.innerHTML = '';
     files.forEach(f => {
+      const dateStr = new Date(f.modified * 1000).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' });
+      const sizeStr = (f.size / 1024).toFixed(1) + ' KB';
+      const fileExt = f.name.split('.').pop().toUpperCase();
+      
       const item = document.createElement('div');
       item.className = 'history-item';
-      const sizeMB = (f.size / 1024 / 1024).toFixed(2);
-      const date = new Date(f.modified * 1000).toLocaleString('id-ID');
+      
       item.innerHTML = `
-        <div>
-          <div class="history-name">${f.name}</div>
-          <div class="history-meta">${sizeMB} MB · ${date}</div>
+        <div class="file-status-circle" title="File Ready">
+          <i data-lucide="check" class="status-check"></i>
         </div>
-        <div style="display: flex; gap: 8px;">
-          <a class="btn btn-sm btn-ghost" href="/api/download/${f.name}" title="Download File">⬇️</a>
-          <button class="btn btn-sm btn-ghost" onclick="deleteHistoryFile('${f.name}')" style="color: #e74c3c;" title="Hapus File">🗑️</button>
+        <div class="file-info-main">
+          <div class="file-name-row">
+            <span class="file-name-text" title="${f.name}">${f.name}</span>
+            <span class="file-ext-badge">${fileExt}</span>
+          </div>
+          <div class="file-meta-row">
+            <span class="meta-item"><i data-lucide="calendar" style="width:12px;"></i> ${dateStr}</span>
+            <span class="meta-item"><i data-lucide="database" style="width:12px;"></i> ${sizeStr}</span>
+          </div>
+        </div>
+        <div class="file-actions">
+          <a class="action-btn-modern" href="/api/download/${f.name}" title="Download Excel">
+            <i data-lucide="download"></i>
+          </a>
+          <button class="action-btn-modern btn-delete" onclick="deleteHistoryFile('${f.name}')" title="Delete File">
+            <i data-lucide="trash-2"></i>
+          </button>
         </div>
       `;
       container.appendChild(item);
     });
-  } catch (e) {
-    container.innerHTML = '<p class="text-muted small">Gagal memuat riwayat.</p>';
+    if (window.lucide) lucide.createIcons();
+  } catch(e) {
+    console.error("History fail:", e);
   }
 }
 
 async function deleteHistoryFile(filename) {
-  if (!confirm(`Apakah Anda yakin ingin menghapus file "${filename}"?`)) return;
-  try {
-    const res = await fetch(`/api/delete-file/${filename}`, { method: 'DELETE' });
-    const json = await res.json();
-    if (json.success) {
-      loadHistory(); // refresh list
-    } else {
-      alert('Gagal menghapus: ' + json.error);
-    }
-  } catch (e) {
-    alert('Terjadi kesalahan saat menghapus file.');
-  }
+  if (!confirm(`Delete ${filename}?`)) return;
+  await fetch(`/api/delete-file/${filename}`, { method: 'DELETE' });
+  loadHistory();
 }
 
-// ──────────────────────────────────────────
-// Helpers & Theme
-// ──────────────────────────────────────────
 function setStatus(el, type, text) {
   el.textContent = text;
-  el.className = 'status-pill' + (type ? ' ' + type : '');
-}
-
-function initTheme() {
-  const savedTheme = localStorage.getItem('theme');
-  if (savedTheme) {
-    document.documentElement.setAttribute('data-theme', savedTheme);
-  } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
-    document.documentElement.setAttribute('data-theme', 'light');
-  }
-  updateThemeIcon();
+  el.className = 'status-pill ' + type;
 }
 
 function toggleTheme() {
-  const currentTheme = document.documentElement.getAttribute('data-theme');
-  const newTheme = currentTheme === 'light' ? 'dark' : 'light';
-  document.documentElement.setAttribute('data-theme', newTheme);
-  localStorage.setItem('theme', newTheme);
+  const body = document.body;
+  const isLight = body.classList.toggle('light-mode');
+  localStorage.setItem('apex-theme', isLight ? 'light' : 'dark');
   updateThemeIcon();
 }
 
 function updateThemeIcon() {
-  const icon = document.getElementById('theme-icon');
-  if (!icon) return;
-  const currentTheme = document.documentElement.getAttribute('data-theme');
-  icon.textContent = currentTheme === 'light' ? '🌙' : '☀️';
+  const btn = document.getElementById('theme-btn');
+  const isLight = document.body.classList.contains('light-mode');
+  if (btn) {
+    btn.innerHTML = isLight ? '<i data-lucide="moon"></i>' : '<i data-lucide="sun"></i>';
+    if (window.lucide) lucide.createIcons();
+  }
 }
 
-// Init
+function initTheme() {
+  const saved = localStorage.getItem('apex-theme');
+  if (saved === 'light') {
+    document.body.classList.add('light-mode');
+  }
+  updateThemeIcon();
+}
+
 window.addEventListener('DOMContentLoaded', () => {
   initTheme();
   loadHistory();
-  updateRunButton();
+  switchTab('scraping');
+  if (window.lucide) lucide.createIcons();
 });
