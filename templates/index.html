@@ -4,10 +4,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Apex Dashboard — PDDikti Premium Scraper</title>
+  <title>PDDIKTI Data Scraper</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+    rel="stylesheet" />
   <link rel="stylesheet" href="/static/style.css?v=1.1" />
   <script src="https://unpkg.com/lucide@latest"></script>
 </head>
@@ -22,7 +24,8 @@
           <div class="logo-glow">🎓</div>
           <div class="logo-text">
             <h1>PDDIKTI SCRAPER</h1>
-            <p class="logo-sub" style="text-transform: none; font-size: 11px; font-weight: 400;">Program Scraping data dosen & prodi</p>
+            <p class="logo-sub" style="text-transform: none; font-size: 11px; font-weight: 400;">Program Scraping data
+              dosen & prodi</p>
           </div>
         </div>
       </div>
@@ -52,76 +55,101 @@
           <p id="page-subtitle">Kelola pengambilan data program studi dan dosen.</p>
         </div>
         <div class="header-actions">
-           <button class="btn-ghost" onclick="toggleTheme()" id="theme-btn">
-             <!-- Icon set dynamically by JS -->
-           </button>
+          <button class="btn-ghost" onclick="toggleTheme()" id="theme-btn">
+            <!-- Icon set dynamically by JS -->
+          </button>
         </div>
       </header>
 
       <!-- ── VIEW 1: HOME SCRAPING ── -->
       <div id="view-scraping" class="view-section">
         <div class="dashboard-view">
-          
+
           <!-- Step 1: Search PT/Prodi -->
           <div class="premium-card">
-            <div class="card-header" style="border-bottom: 1px solid var(--border-glass); padding-bottom: 16px; margin-bottom: 24px; display: flex; align-items: center; gap: 16px;">
-              <div class="step-badge" style="width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, var(--accent-pink), var(--accent-purple)); display: flex; align-items: center; justify-content: center; font-weight: 800; color: white; font-size: 18px;">1</div>
+            <div class="card-header"
+              style="border-bottom: 1px solid var(--border-glass); padding-bottom: 16px; margin-bottom: 24px; display: flex; align-items: center; gap: 16px;">
+              <div class="step-badge"
+                style="width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, var(--accent-pink), var(--accent-purple)); display: flex; align-items: center; justify-content: center; font-weight: 800; color: white; font-size: 18px;">
+                1</div>
               <div>
                 <h3 style="font-size: 19px; font-weight: 700;">Ambil Katalog Data</h3>
-                <p class="card-desc text-muted" style="font-size: 13px;">Sinkronisasi daftar program studi terbaru dari database pusat.</p>
+                <p class="card-desc text-muted" style="font-size: 13px;">Sinkronisasi daftar program studi terbaru dari
+                  database pusat.</p>
               </div>
             </div>
             <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
-              <button id="btn-fetch" class="control-btn btn-neon-cyan" style="width: auto; padding: 12px 28px; border-radius: 12px;" onclick="fetchProdi()">
-                <i data-lucide="refresh-cw" id="fetch-btn-icon"></i> <span id="fetch-btn-text">Ambil Katalog Prodi</span>
+              <button id="btn-fetch" class="control-btn btn-neon-cyan"
+                style="width: auto; padding: 12px 28px; border-radius: 12px;" onclick="fetchProdi()">
+                <i data-lucide="refresh-cw" id="fetch-btn-icon"></i> <span id="fetch-btn-text">Ambil Katalog
+                  Prodi</span>
               </button>
               <div id="fetch-status" class="status-pill" style="padding: 10px 20px;">Idle</div>
             </div>
-            <div id="bidang-filters" class="bidang-pills-row" style="display:none; margin-top:24px; border-top: 1px dashed var(--border-glass); padding-top: 20px;">
+            <div id="bidang-filters" class="bidang-pills-row"
+              style="display:none; margin-top:24px; border-top: 1px dashed var(--border-glass); padding-top: 20px;">
               <!-- Bidang pills inserted here -->
             </div>
           </div>
 
           <!-- Step 2: Selection -->
           <div class="premium-card">
-            <div class="card-header" style="border-bottom: 1px solid var(--border-glass); padding-bottom: 16px; margin-bottom: 20px; display: flex; align-items: center; gap: 16px;">
-              <div class="step-badge" style="width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(135deg, var(--accent-blue), var(--accent-cyan)); display: flex; align-items: center; justify-content: center; font-weight: 700; color: white; color: black;">2</div>
+            <div class="card-header"
+              style="border-bottom: 1px solid var(--border-glass); padding-bottom: 16px; margin-bottom: 20px; display: flex; align-items: center; gap: 16px;">
+              <div class="step-badge"
+                style="width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(135deg, var(--accent-blue), var(--accent-cyan)); display: flex; align-items: center; justify-content: center; font-weight: 700; color: white; color: black;">
+                2</div>
               <div>
                 <h3 style="font-size: 18px; font-weight: 600;">Pilih Program Studi</h3>
-                <p class="card-desc text-muted" style="font-size: 13px;">Centang prodi yang ingin diambil data dosennya</p>
+                <p class="card-desc text-muted" style="font-size: 13px;">Centang prodi yang ingin diambil data dosennya
+                </p>
               </div>
             </div>
-            
-            <div class="search-bar" style="margin-bottom: 15px; border-radius: 12px; border: 1px solid var(--border-glass); background: rgba(0,0,0,0.02); padding: 12px 16px; display: flex; align-items: center; gap: 12px;">
+
+            <div class="search-bar"
+              style="margin-bottom: 15px; border-radius: 12px; border: 1px solid var(--border-glass); background: rgba(0,0,0,0.02); padding: 12px 16px; display: flex; align-items: center; gap: 12px;">
               <i data-lucide="search" style="width: 18px; color: var(--text-muted);"></i>
-              <input type="text" id="search-input" placeholder="Cari nama program studi..." oninput="filterList()" style="flex: 1; background: none; border: none; outline: none; font-family: 'Inter';" />
-              <span id="count-badge" class="count-badge" style="background: rgba(63,94,251,0.2); padding: 4px 12px; border-radius: 50px; font-size: 12px; border: 1px solid var(--accent-blue);">0 terpilih</span>
+              <input type="text" id="search-input" placeholder="Cari nama program studi..." oninput="filterList()"
+                style="flex: 1; background: none; border: none; outline: none; font-family: 'Inter';" />
+              <span id="count-badge" class="count-badge"
+                style="background: rgba(63,94,251,0.2); padding: 4px 12px; border-radius: 50px; font-size: 12px; border: 1px solid var(--accent-blue);">0
+                terpilih</span>
             </div>
 
             <!-- Section: Selected Tags Preview -->
-            <div id="selected-summary" class="selected-summary" style="display:none; background: rgba(255,255,255,0.02); border: 1px dashed var(--border-glass); padding: 12px; border-radius: 12px; margin-bottom: 15px;">
+            <div id="selected-summary" class="selected-summary"
+              style="display:none; background: rgba(255,255,255,0.02); border: 1px dashed var(--border-glass); padding: 12px; border-radius: 12px; margin-bottom: 15px;">
               <span class="text-sub small" style="margin-bottom: 8px; display: block;">Daftar Pilihan:</span>
               <div id="selected-tags" class="selected-tags" style="display: flex; flex-wrap: wrap; gap: 8px;"></div>
             </div>
 
             <div style="display: flex; gap: 10px; margin-bottom: 15px;">
-              <button class="btn-ghost" style="padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border-glass); background: rgba(255,255,255,0.05); cursor: pointer;" onclick="selectAll()">
+              <button class="btn-ghost"
+                style="padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border-glass); background: rgba(255,255,255,0.05); cursor: pointer;"
+                onclick="selectAll()">
                 <i data-lucide="check-square" style="width:14px;"></i> Pilih Semua
               </button>
-              <button class="btn-ghost" style="padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border-glass); background: rgba(255,255,255,0.05); cursor: pointer;" onclick="clearAll()">
+              <button class="btn-ghost"
+                style="padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border-glass); background: rgba(255,255,255,0.05); cursor: pointer;"
+                onclick="clearAll()">
                 <i data-lucide="trash-2" style="width:14px;"></i> Hapus Semua
               </button>
             </div>
 
-            <div class="prodi-list" id="prodi-list" style="max-height: 400px; overflow-y: auto; overflow-x: hidden; border: 1px solid var(--border-glass); border-radius: 12px; padding: 10px; background: rgba(0,0,0,0.2);">
-              <div class="empty-state" style="text-align: center; color: var(--text-muted); padding: 40px 0;">Daftar prodi akan muncul di sini.</div>
+            <div class="prodi-list" id="prodi-list"
+              style="max-height: 400px; overflow-y: auto; overflow-x: hidden; border: 1px solid var(--border-glass); border-radius: 12px; padding: 10px; background: rgba(0,0,0,0.2);">
+              <div class="empty-state" style="text-align: center; color: var(--text-muted); padding: 40px 0;">Daftar
+                prodi akan muncul di sini.</div>
             </div>
           </div>
 
           <!-- Step 3: Action & Log -->
           <div class="premium-card">
-            <div class="card-header" style="border-bottom: 1px solid var(--border-glass); padding-bottom: 16px; margin-bottom: 20px; display: flex; align-items: center; gap: 16px;">
-              <div class="step-badge" style="width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(135deg, var(--accent-green), var(--accent-cyan)); display: flex; align-items: center; justify-content: center; font-weight: 700; color: black;">3</div>
+            <div class="card-header"
+              style="border-bottom: 1px solid var(--border-glass); padding-bottom: 16px; margin-bottom: 20px; display: flex; align-items: center; gap: 16px;">
+              <div class="step-badge"
+                style="width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(135deg, var(--accent-green), var(--accent-cyan)); display: flex; align-items: center; justify-content: center; font-weight: 700; color: black;">
+                3</div>
               <div>
                 <h3 style="font-size: 18px; font-weight: 600;">Jalankan Scraper</h3>
                 <p class="card-desc text-muted" style="font-size: 13px;">Mulai eksekusi penarikan data</p>
@@ -133,10 +161,14 @@
                 <button id="btn-run" class="control-btn btn-neon-pink" onclick="runScraper()" disabled>
                   <i data-lucide="play"></i> Jalankan scraper
                 </button>
-                <div id="run-status" class="status-pill" style="margin-top:15px; width: 100%; text-align: center;">Menunggu pilihan prodi</div>
+                <div id="run-status" class="status-pill" style="margin-top:15px; width: 100%; text-align: center;">
+                  Menunggu pilihan prodi</div>
               </div>
-              <div id="log-wrapper" class="log-wrapper" style="flex: 2; min-width: 300px; display:none; background: #060a14; border: 1px solid var(--border-glass); border-radius: 12px; overflow: hidden;">
-                <div class="log-box" id="log-box" style="height: 250px; padding: 16px; overflow-y: auto; font-family: 'JetBrains Mono'; font-size: 12px; color: #00ffab;"></div>
+              <div id="log-wrapper" class="log-wrapper"
+                style="flex: 2; min-width: 300px; display:none; background: #060a14; border: 1px solid var(--border-glass); border-radius: 12px; overflow: hidden;">
+                <div class="log-box" id="log-box"
+                  style="height: 250px; padding: 16px; overflow-y: auto; font-family: 'JetBrains Mono'; font-size: 12px; color: #00ffab;">
+                </div>
               </div>
             </div>
           </div>
@@ -147,19 +179,23 @@
       <!-- ── VIEW 2: RIWAYAT ── -->
       <div id="view-history" class="view-section" style="display: none;">
         <div id="download-section-history" style="display:none; margin-bottom: 24px;">
-           <div class="premium-card" style="background: rgba(0, 255, 171, 0.05); border: 1px solid rgba(0, 255, 171, 0.2);">
-             <div style="display: flex; justify-content: space-between; align-items: center;">
-               <div>
-                   <h4 style="color: var(--accent-green);"><i data-lucide="check-circle" style="width:18px; vertical-align: middle; margin-right: 8px;"></i> Scraping Batch Selesai!</h4>
-                  <p id="dl-filename" style="font-size: 11px; font-family: 'JetBrains Mono'; opacity: 0.6;"></p>
-               </div>
-               <div style="display: flex; gap: 12px;">
-                  <a id="dl-btn" class="btn btn-primary btn-neon-cyan" style="color: #000; display: flex; align-items: center; gap: 8px; text-decoration: none; padding: 10px 20px; border-radius: 10px; font-weight: 700;" href="#">
-                    <i data-lucide="download"></i> UNDUH EXCEL
-                  </a>
-               </div>
-             </div>
-           </div>
+          <div class="premium-card"
+            style="background: rgba(0, 255, 171, 0.05); border: 1px solid rgba(0, 255, 171, 0.2);">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <h4 style="color: var(--accent-green);"><i data-lucide="check-circle"
+                    style="width:18px; vertical-align: middle; margin-right: 8px;"></i> Scraping Batch Selesai!</h4>
+                <p id="dl-filename" style="font-size: 11px; font-family: 'JetBrains Mono'; opacity: 0.6;"></p>
+              </div>
+              <div style="display: flex; gap: 12px;">
+                <a id="dl-btn" class="btn btn-primary btn-neon-cyan"
+                  style="color: #000; display: flex; align-items: center; gap: 8px; text-decoration: none; padding: 10px 20px; border-radius: 10px; font-weight: 700;"
+                  href="#">
+                  <i data-lucide="download"></i> UNDUH EXCEL
+                </a>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- New 2-Column Grid Layout -->
@@ -167,10 +203,11 @@
           <!-- Left Column: Summary & Illustration -->
           <div class="history-sidebar-col">
             <div class="premium-card history-summary-card">
-               <div class="summary-illustration"><i data-lucide="folder-open" style="width: 48px; height: 48px;"></i></div>
+              <div class="summary-illustration"><i data-lucide="folder-open" style="width: 48px; height: 48px;"></i>
+              </div>
               <h3 class="summary-title">Archive Storage</h3>
               <p class="summary-desc">Ringkasan berkas yang telah dikumpulkan.</p>
-              
+
               <div class="summary-stats-grid">
                 <div class="stat-pill-mini">
                   <span class="stat-label">Total Files</span>
@@ -181,18 +218,19 @@
                   <span class="stat-value" id="total-files-size">0 KB</span>
                 </div>
               </div>
-              
+
               <div class="last-sync-info">
                 <span>Terakhir diperbarui:</span>
                 <p id="last-sync-date">-</p>
               </div>
             </div>
-            
+
             <div class="info-note-card">
-               <p style="display: flex; gap: 10px; align-items: flex-start;">
-                 <i data-lucide="lightbulb" style="width: 16px; color: var(--accent-cyan); flex-shrink: 0;"></i>
-                 <span>Tip: Gunakan tombol unduh untuk mengambil file Excel dan tombol sampah untuk membersihkan penyimpanan.</span>
-               </p>
+              <p style="display: flex; gap: 10px; align-items: flex-start;">
+                <i data-lucide="lightbulb" style="width: 16px; color: var(--accent-cyan); flex-shrink: 0;"></i>
+                <span>Tip: Gunakan tombol unduh untuk mengambil file Excel dan tombol sampah untuk membersihkan
+                  penyimpanan.</span>
+              </p>
             </div>
           </div>
 
