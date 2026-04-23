@@ -339,32 +339,10 @@ function setStatus(el, type, text) {
   el.className = 'status-pill ' + type;
 }
 
-function toggleTheme() {
-  const body = document.body;
-  const isLight = body.classList.toggle('light-mode');
-  localStorage.setItem('apex-theme', isLight ? 'light' : 'dark');
-  updateThemeIcon();
-}
 
-function updateThemeIcon() {
-  const btn = document.getElementById('theme-btn');
-  const isLight = document.body.classList.contains('light-mode');
-  if (btn) {
-    btn.innerHTML = isLight ? '<i data-lucide="moon"></i>' : '<i data-lucide="sun"></i>';
-    if (window.lucide) lucide.createIcons();
-  }
-}
 
-function initTheme() {
-  const saved = localStorage.getItem('apex-theme');
-  if (saved === 'light') {
-    document.body.classList.add('light-mode');
-  }
-  updateThemeIcon();
-}
 
 window.addEventListener('DOMContentLoaded', () => {
-  initTheme();
   loadHistory();
   switchTab('scraping');
   if (window.lucide) lucide.createIcons();

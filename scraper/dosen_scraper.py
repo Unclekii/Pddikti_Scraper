@@ -14,6 +14,11 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 import collections
+import urllib.parse
+try:
+    from scraper.diktis_data import is_diktis, refresh_ptkin_whitelist, classify_pt_from_name, PTKIN_SET
+except ImportError:
+    from diktis_data import is_diktis, refresh_ptkin_whitelist, classify_pt_from_name, PTKIN_SET
 
 BASE_URL = "https://api-pddikti.kemdiktisaintek.go.id"
 HEADERS = {
@@ -28,10 +33,13 @@ RETRY_DELAY = 2
 REQUEST_DELAY = 0.15
 MAX_WORKERS = 5
 
-COLOR_HEADER = "1F4E79"
-COLOR_HEADER_FONT = "FFFFFF"
-COLOR_ALT_ROW = "D6E4F0"
-COLOR_TITLE = "2E75B6"
+COLOR_DOSEN_HEADER = "1F4E79"
+COLOR_DOSEN_ALT_ROW = "D6E4F0"
+COLOR_DOSEN_TITLE = "2E75B6"
+
+COLOR_PRODI_HEADER = "228B22"  # Forest Green
+COLOR_PRODI_ALT_ROW = "E8F5E9" # Light Green
+COLOR_PRODI_TITLE = "2E8B57"   # Sea Green
 
 
 def normalize(name):
@@ -70,6 +78,7 @@ def make_session():
 
 def fetch_api(session, endpoint, retries=MAX_RETRIES):
     url = f"{BASE_URL}/{endpoint}"
+    last_err = None
     for attempt in range(retries):
         try:
             r = session.get(url, headers=HEADERS, timeout=TIMEOUT)
@@ -78,14 +87,24 @@ def fetch_api(session, endpoint, retries=MAX_RETRIES):
             if isinstance(data, dict) and data.get("message") == "Not Found":
                 return None
             return data
-        except requests.exceptions.Timeout:
+        except requests.exceptions.Timeout as e:
+            last_err = e
             if attempt < retries - 1:
                 time.sleep(RETRY_DELAY * (attempt + 1))
-        except requests.exceptions.RequestException:
+        except requests.exceptions.RequestException as e:
+            last_err = e
             if attempt < retries - 1:
-                time.sleep(RETRY_DELAY * (attempt + 1))
+                # Backoff lebih lama jika terkena Rate Limit 429
+                if e.response is not None and e.response.status_code == 429:
+                    time.sleep(5)
+                else:
+                    time.sleep(RETRY_DELAY * (attempt + 1))
         except json.JSONDecodeError:
             return None
+            
+    # Jika gagal total gara-gara server PDDikti (nge-lag/rate-limit)
+    if last_err:
+        raise Exception("Gagal terhubung ke server PDDikti (Server sibuk/rate-limit). Mohon jeda beberapa saat lalu coba lagi.")
     return None
 
 
@@ -93,32 +112,69 @@ PT_CACHE = {}
 
 
 def get_pt_info(session, pt_query):
+    """
+    Mengidentifikasi: PTN/PTS, PTKIN/NON-PTKIN, DIKTI/DIKTIS.
+
+    Strategi DIKTI/DIKTIS (Opsi C — 3 Lapis):
+      Layer 1: Exact-match whitelist PTKIN resmi (diktis_data.py)
+      Layer 2: Keyword pada nama kampus (UIN, IAIN, STAI, dll.)
+      Layer 3: Keyword kolom 'pembina' dari PDDikti API (fallback heuristik)
+
+    Jika API PDDikti gagal di tahap mana pun (timeout / not found),
+    fungsi tetap mengembalikan klasifikasi best-effort dari nama PT
+    menggunakan classify_pt_from_name() — kolom Excel tidak akan kosong.
+    """
     if not pt_query or not pt_query.strip():
         return {}
     if pt_query in PT_CACHE:
         return PT_CACHE[pt_query]
-    results = fetch_api(session, f"pencarian/pt/{pt_query}")
+
+    # ── Step 1: Cari ID kampus di PDDikti ─────────────────────────
+    quoted_pt = urllib.parse.quote(pt_query)
+    results = fetch_api(session, f"pencarian/pt/{quoted_pt}")
     if not results:
-        return {}
+        # API tidak menemukan kampus → fallback klasifikasi dari nama
+        info = classify_pt_from_name(pt_query)
+        PT_CACHE[pt_query] = info
+        return info
+
     pt_id = results[0].get("id")
     if not pt_id:
-        return {}
+        info = classify_pt_from_name(pt_query)
+        PT_CACHE[pt_query] = info
+        return info
+
+    # ── Step 2: Ambil detail PT (pembina, kelompok) ───────────────
     detail = fetch_api(session, f"pt/detail/{pt_id}")
     if not detail:
-        return {}
-    pembina = detail.get("pembina", "")
-    kelompok = detail.get("kelompok", "")
-    is_negeri = "NEGERI" in pembina.upper() or "NEGERI" in kelompok.upper()
-    is_islam = any(k in pembina.upper() for k in ["ISLAM", "AGAMA"])
-    pt_upper = pt_query.upper()
-    diktis_kw = ["UIN ", "UNIVERSITAS ISLAM NEGERI", "IAIN ", "INSTITUT AGAMA ISLAM",
-                 "STAIN ", "SEKOLAH TINGGI AGAMA ISLAM", "STEBIS", "SEKOLAH TINGGI EKONOMI ISLAM", "STAI ", "STEI "]
-    is_diktis = any(k in pt_upper for k in diktis_kw) or \
-                any(k in pembina.upper() for k in ["AGAMA", "DIKTIS", "KEMENTERIAN AGAMA", "KOPERTAIS", "KOPERAIS"])
+        # Detail gagal → fallback klasifikasi dari nama
+        info = classify_pt_from_name(pt_query)
+        PT_CACHE[pt_query] = info
+        return info
+
+    pembina = detail.get("pembina", "") or ""
+    kelompok = detail.get("kelompok", "") or ""
+
+    # ── Step 3: Klasifikasi lengkap dengan data API ───────────────
+    pt_upper = pt_query.upper().strip()
+
+    # FORCE IDENTITY: Jika ada di Whitelist SPAN-PTKIN, statusnya mutlak (Absolut)
+    if pt_upper in PTKIN_SET:
+        is_negeri = True
+        is_ptkin = True
+    else:
+        # Fallback heuristik PDDikti jika bukan PTKIN Kemenag
+        is_negeri = ("NEGERI" in pembina.upper() or "NEGERI" in kelompok.upper())
+        is_islam_pembina = any(k in pembina.upper() for k in ["ISLAM", "AGAMA"])
+        is_ptkin = is_negeri and is_islam_pembina
+
+    # DIKTI/DIKTIS: 3-layer check (berlaku mutlak untuk semuanya)
+    is_diktis_result = is_diktis(pt_query, pembina=pembina, kelompok=kelompok)
+
     info = {
         "ptn_pts": "PTN" if is_negeri else "PTS",
-        "ptkin_non": "PTKIN" if is_islam and is_negeri else "NON PTKIN",
-        "dikti_diktis": "DIKTIS" if is_diktis else "DIKTI",
+        "ptkin_non": "PTKIN" if is_ptkin else "NON PTKIN",
+        "dikti_diktis": "DIKTIS" if is_diktis_result else "DIKTI",
     }
     PT_CACHE[pt_query] = info
     return info
@@ -134,7 +190,8 @@ def search_all_prodi(session, prodi_keywords, semester, cb):
     for keyword in prodi_keywords:
         cb(f"\n🔍 Mencari: {keyword}")
         time.sleep(REQUEST_DELAY)
-        results = fetch_api(session, f"pencarian/prodi/{keyword}")
+        quoted_kw = urllib.parse.quote(keyword)
+        results = fetch_api(session, f"pencarian/prodi/{quoted_kw}")
         if not results:
             cb(f"   ⚠️ Tidak ditemukan")
             continue
@@ -157,7 +214,12 @@ def search_all_prodi(session, prodi_keywords, semester, cb):
                 continue
             time.sleep(REQUEST_DELAY)
             detail = fetch_api(session, f"prodi/detail/{prodi_id}")
-            status = (detail.get("status") or "") if detail else ""
+            
+            # detail bisa None HANYA JIKA PDDikti mengembalikan 'Not Found' atau Error JSON Parse
+            if detail is None:
+                continue
+                
+            status = detail.get("status", "") or ""
             if status.upper() != "AKTIF":
                 continue
             seen_logical.add(logical_key)
@@ -310,9 +372,9 @@ def fetch_all_profiles(session, dosen_list, cb):
     return all_profiles
 
 
-def _apply_header_style(ws, row, max_col):
-    hf = Font(name="Calibri", bold=True, color=COLOR_HEADER_FONT, size=11)
-    hfill = PatternFill(start_color=COLOR_HEADER, end_color=COLOR_HEADER, fill_type="solid")
+def _apply_header_style(ws, row, max_col, header_color):
+    hf = Font(name="Calibri", bold=True, color="FFFFFF", size=11)
+    hfill = PatternFill(start_color=header_color, end_color=header_color, fill_type="solid")
     ha = Alignment(horizontal="center", vertical="center", wrap_text=True)
     border = Border(left=Side(style="thin"), right=Side(style="thin"),
                     top=Side(style="thin"), bottom=Side(style="thin"))
@@ -321,8 +383,8 @@ def _apply_header_style(ws, row, max_col):
         c.font, c.fill, c.alignment, c.border = hf, hfill, ha, border
 
 
-def _apply_data_style(ws, start_row, end_row, max_col):
-    alt = PatternFill(start_color=COLOR_ALT_ROW, end_color=COLOR_ALT_ROW, fill_type="solid")
+def _apply_data_style(ws, start_row, end_row, max_col, alt_row_color):
+    alt = PatternFill(start_color=alt_row_color, end_color=alt_row_color, fill_type="solid")
     border = Border(left=Side(style="thin"), right=Side(style="thin"),
                     top=Side(style="thin"), bottom=Side(style="thin"))
     for row in range(start_row, end_row + 1):
@@ -355,7 +417,7 @@ def export_to_excel(profiles, prodi_list, semester, output_dir, cb):
             "NIDN", "NUPTK", "Status Kepegawaian", "Jenjang", "Semester Data"]
     mc = len(cols)
     ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=mc)
-    ws.cell(1, 1, "📊 DATA DOSEN PROGRAM STUDI PILIHAN").font = Font(name="Calibri", bold=True, color=COLOR_TITLE, size=14)
+    ws.cell(1, 1, "📊 DATA DOSEN PROGRAM STUDI PILIHAN").font = Font(name="Calibri", bold=True, color=COLOR_DOSEN_TITLE, size=14)
     ws.cell(1, 1).alignment = Alignment(horizontal="center", vertical="center")
     ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=mc)
     ws.cell(2, 1, f"Sumber: PDDikti API — Diambil pada {time_str}").font = Font(name="Calibri", italic=True, color="666666", size=9)
@@ -365,7 +427,7 @@ def export_to_excel(profiles, prodi_list, semester, output_dir, cb):
     ws.cell(3, 1).alignment = Alignment(horizontal="center")
     for col, h in enumerate(cols, 1):
         ws.cell(5, col, h)
-    _apply_header_style(ws, 5, mc)
+    _apply_header_style(ws, 5, mc, COLOR_DOSEN_HEADER)
     sorted_profiles = sorted(profiles, key=lambda x: (x.get("Program Studi", ""), x.get("Nama", "")))
     for i, p in enumerate(sorted_profiles, 1):
         row = 5 + i
@@ -375,7 +437,7 @@ def export_to_excel(profiles, prodi_list, semester, output_dir, cb):
                 p.get("NUPTK"), p.get("Status Kepegawaian"), p.get("Jenjang"), p.get("Semester Data")]
         for col, val in enumerate(vals, 1):
             ws.cell(row, col, val)
-    _apply_data_style(ws, 6, 5 + len(sorted_profiles), mc)
+    _apply_data_style(ws, 6, 5 + len(sorted_profiles), mc, COLOR_DOSEN_ALT_ROW)
     _auto_width(ws, mc)
     ws.freeze_panes = "B6"
 
@@ -386,11 +448,11 @@ def export_to_excel(profiles, prodi_list, semester, output_dir, cb):
               "PTKIN/NON PTKIN", "DIKTI/DIKTIS", "Provinsi", "Semester Laporan Terakhir"]
     mc2 = len(p_cols)
     ws2.merge_cells(start_row=1, start_column=1, end_row=1, end_column=mc2)
-    ws2.cell(1, 1, "📋 DAFTAR PROGRAM STUDI PILIHAN").font = Font(name="Calibri", bold=True, color=COLOR_TITLE, size=14)
+    ws2.cell(1, 1, "📋 DAFTAR PROGRAM STUDI PILIHAN").font = Font(name="Calibri", bold=True, color=COLOR_PRODI_TITLE, size=14)
     ws2.cell(1, 1).alignment = Alignment(horizontal="center")
     for col, h in enumerate(p_cols, 1):
         ws2.cell(3, col, h)
-    _apply_header_style(ws2, 3, mc2)
+    _apply_header_style(ws2, 3, mc2, COLOR_PRODI_HEADER)
     prodi_count = {}
     for p in sorted_profiles:
         key = f"{p.get('Program Studi','').upper()}|{p.get('Perguruan Tinggi','').upper()}"
@@ -405,7 +467,7 @@ def export_to_excel(profiles, prodi_list, semester, output_dir, cb):
                 prodi.get("semester_lapor", "Belum Lapor")]
         for col, val in enumerate(vals, 1):
             ws2.cell(row, col, val)
-    _apply_data_style(ws2, 4, 3 + len(prodi_list), mc2)
+    _apply_data_style(ws2, 4, 3 + len(prodi_list), mc2, COLOR_PRODI_ALT_ROW)
     _auto_width(ws2, mc2)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -422,6 +484,10 @@ def export_to_excel(profiles, prodi_list, semester, output_dir, cb):
 def run_dosen_scraper(prodi_keywords, output_dir, callback):
     """Entry point. prodi_keywords: list of prodi name strings."""
     PT_CACHE.clear()
+
+    # ── Auto-refresh whitelist PTKIN dari SPAN-PTKIN (sekali per sesi) ──
+    refresh_ptkin_whitelist(log_fn=callback)
+
     session = make_session()
     semester, fallbacks = get_semesters()
     callback(f"\n⚙️  Semester: {semester}")

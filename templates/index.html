@@ -54,11 +54,6 @@
           <h2 id="page-title">Home Scraping</h2>
           <p id="page-subtitle">Kelola pengambilan data program studi dan dosen.</p>
         </div>
-        <div class="header-actions">
-          <button class="btn-ghost" onclick="toggleTheme()" id="theme-btn">
-            <!-- Icon set dynamically by JS -->
-          </button>
-        </div>
       </header>
 
       <!-- ── VIEW 1: HOME SCRAPING ── -->
@@ -67,22 +62,16 @@
 
           <!-- Step 1: Search PT/Prodi -->
           <div class="premium-card">
-            <div class="card-header"
-              style="border-bottom: 1px solid var(--border-glass); padding-bottom: 16px; margin-bottom: 24px; display: flex; align-items: center; gap: 16px;">
-              <div class="step-badge"
-                style="width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, var(--accent-pink), var(--accent-purple)); display: flex; align-items: center; justify-content: center; font-weight: 800; color: white; font-size: 18px;">
-                1</div>
+            <div class="step-header-wrapper">
+              <div class="step-badge-icon">1</div>
               <div>
                 <h3 style="font-size: 19px; font-weight: 700;">Ambil Katalog Data</h3>
-                <p class="card-desc text-muted" style="font-size: 13px;">Sinkronisasi daftar program studi terbaru dari
-                  database pusat.</p>
+                <p class="card-desc text-muted" style="font-size: 13px;">Sinkronisasi daftar program studi terbaru dari database pusat.</p>
               </div>
             </div>
             <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
-              <button id="btn-fetch" class="control-btn btn-neon-cyan"
-                style="width: auto; padding: 12px 28px; border-radius: 12px;" onclick="fetchProdi()">
-                <i data-lucide="refresh-cw" id="fetch-btn-icon"></i> <span id="fetch-btn-text">Ambil Katalog
-                  Prodi</span>
+              <button id="btn-fetch" class="control-btn btn-secondary" style="width: auto; padding: 12px 28px;" onclick="fetchProdi()">
+                <i data-lucide="refresh-cw" id="fetch-btn-icon"></i> <span id="fetch-btn-text">Ambil Katalog Prodi</span>
               </button>
               <div id="fetch-status" class="status-pill" style="padding: 10px 20px;">Idle</div>
             </div>
@@ -94,15 +83,11 @@
 
           <!-- Step 2: Selection -->
           <div class="premium-card">
-            <div class="card-header"
-              style="border-bottom: 1px solid var(--border-glass); padding-bottom: 16px; margin-bottom: 20px; display: flex; align-items: center; gap: 16px;">
-              <div class="step-badge"
-                style="width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(135deg, var(--accent-blue), var(--accent-cyan)); display: flex; align-items: center; justify-content: center; font-weight: 700; color: white; color: black;">
-                2</div>
+            <div class="step-header-wrapper">
+              <div class="step-badge-icon">2</div>
               <div>
                 <h3 style="font-size: 18px; font-weight: 600;">Pilih Program Studi</h3>
-                <p class="card-desc text-muted" style="font-size: 13px;">Centang prodi yang ingin diambil data dosennya
-                </p>
+                <p class="card-desc text-muted" style="font-size: 13px;">Centang prodi yang ingin diambil data dosennya</p>
               </div>
             </div>
 
@@ -138,18 +123,17 @@
 
             <div class="prodi-list" id="prodi-list"
               style="max-height: 400px; overflow-y: auto; overflow-x: hidden; border: 1px solid var(--border-glass); border-radius: 12px; padding: 10px; background: rgba(0,0,0,0.2);">
-              <div class="empty-state" style="text-align: center; color: var(--text-muted); padding: 40px 0;">Daftar
-                prodi akan muncul di sini.</div>
+              <div class="empty-state" style="text-align: center; color: var(--text-muted); padding: 40px 0; display: flex; flex-direction: column; align-items: center; gap: 12px;">
+                <i data-lucide="database" style="color: var(--text-dim); width: 32px; height: 32px;"></i>
+                <span>Daftar prodi akan muncul di sini.</span>
+              </div>
             </div>
           </div>
 
           <!-- Step 3: Action & Log -->
           <div class="premium-card">
-            <div class="card-header"
-              style="border-bottom: 1px solid var(--border-glass); padding-bottom: 16px; margin-bottom: 20px; display: flex; align-items: center; gap: 16px;">
-              <div class="step-badge"
-                style="width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(135deg, var(--accent-green), var(--accent-cyan)); display: flex; align-items: center; justify-content: center; font-weight: 700; color: black;">
-                3</div>
+            <div class="step-header-wrapper">
+              <div class="step-badge-icon">3</div>
               <div>
                 <h3 style="font-size: 18px; font-weight: 600;">Jalankan Scraper</h3>
                 <p class="card-desc text-muted" style="font-size: 13px;">Mulai eksekusi penarikan data</p>
@@ -158,7 +142,7 @@
 
             <div style="display: flex; gap: 24px; align-items: flex-start; flex-wrap: wrap;">
               <div style="flex: 1; min-width: 250px;">
-                <button id="btn-run" class="control-btn btn-neon-pink" onclick="runScraper()" disabled>
+                <button id="btn-run" class="control-btn btn-primary" onclick="runScraper()" disabled>
                   <i data-lucide="play"></i> Jalankan scraper
                 </button>
                 <div id="run-status" class="status-pill" style="margin-top:15px; width: 100%; text-align: center;">
