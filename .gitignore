@@ -7,3 +7,14 @@ env/
 
 # Ignored output files
 output/*.xlsx
+output/*.json
+
+# Temporary / test scripts
+temp_*.py
+smoke_test.py
+test_api*.py
+TODO.md
+
+# IDE
+.vscode/
+.idea/

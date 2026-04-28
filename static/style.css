@@ -399,6 +399,18 @@ input::placeholder {
   box-shadow: none;
 }
 
+.btn-danger {
+  background: var(--accent-pink);
+  color: white;
+  border: 1px solid rgba(255,255,255,0.1);
+}
+
+.btn-danger:hover {
+  background: #ff1a6b;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(251, 37, 118, 0.3);
+}
+
 .btn-secondary {
   background: var(--bg-sidebar);
   color: var(--text-main);
@@ -612,6 +624,212 @@ input::placeholder {
   color: var(--accent-cyan);
   animation: pulse-glow 1.5s infinite;
 }
+
+.status-pill.cancelled {
+  background: rgba(251, 37, 118, 0.05);
+  border-color: rgba(251, 37, 118, 0.2);
+  color: var(--accent-pink);
+  font-weight: 600;
+}
+/* ═══════════════════════════════
+   History Premium File Manager Styles
+   ═══════════════════════════════ */
+.history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.history-item {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 20px 24px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-lg);
+  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  position: relative;
+  overflow: hidden;
+}
+
+.history-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: var(--accent-blue);
+  opacity: 0;
+  transition: var(--transition);
+}
+
+.history-item:hover {
+  background: var(--bg-card-hover);
+  border-color: rgba(63, 94, 251, 0.3);
+  transform: translateX(10px) scale(1.02);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+}
+
+.history-item:hover::before {
+  opacity: 1;
+}
+
+/* Status Icon Circle */
+.file-status-circle {
+  width: 48px;
+  height: 48px;
+  min-width: 48px;
+  border-radius: 50%;
+  border: 2px solid rgba(63, 94, 251, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  background: rgba(63, 94, 251, 0.05);
+  transition: var(--transition);
+}
+
+.history-item:hover .file-status-circle {
+  border-color: var(--accent-blue);
+  background: rgba(63, 94, 251, 0.1);
+}
+
+.status-check {
+  font-size: 20px;
+  color: var(--accent-blue);
+  animation: bounce-in 0.6s ease;
+}
+
+/* File Info */
+.file-info-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.file-name-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.file-name-text {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-main);
+  letter-spacing: -0.2px;
+}
+
+.file-ext-badge {
+  font-size: 10px;
+  background: rgba(0, 255, 171, 0.15);
+  color: var(--accent-green);
+  padding: 2px 8px;
+  border-radius: 6px;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
+.file-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.meta-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Action Group */
+.file-actions {
+  display: flex;
+  gap: 10px;
+  opacity: 0.6;
+  transition: var(--transition);
+}
+
+.history-item:hover .file-actions {
+  opacity: 1;
+}
+
+.action-btn-modern {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  border: 1px solid var(--border-glass);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-main);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: var(--transition);
+  font-size: 16px;
+  text-decoration: none;
+}
+
+.btn-ghost {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  background: transparent;
+  border: 1px solid var(--border-glass);
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 500;
+  padding: 8px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: var(--transition);
+}
+.btn-ghost:hover {
+  background: rgba(255,255,255,0.05);
+  color: var(--text-main);
+}
+
+.status-pill {
+  display: inline-block;
+  padding: 6px 14px;
+  border-radius: 50px;
+  font-size: 12px;
+  font-weight: 500;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid var(--border-glass);
+  color: var(--text-muted);
+}
+.status-pill.success {
+  background: rgba(0, 255, 171, 0.1);
+  border-color: rgba(0, 255, 171, 0.3);
+  color: var(--accent-green);
+}
+.status-pill.error {
+  background: rgba(251, 37, 118, 0.1);
+  border-color: rgba(251, 37, 118, 0.3);
+  color: var(--accent-pink);
+}
+.status-pill.running {
+  background: rgba(0, 242, 254, 0.1);
+  border-color: rgba(0, 242, 254, 0.3);
+  color: var(--accent-cyan);
+  animation: pulse-glow 1.5s infinite;
+}
+
+.status-pill.cancelled {
+  background: rgba(255, 171, 0, 0.1);
+  border-color: rgba(255, 171, 0, 0.3);
+  color: #ffab00; 
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
 /* ═══════════════════════════════
    History Premium File Manager Styles
    ═══════════════════════════════ */
@@ -776,8 +994,6 @@ input::placeholder {
   box-shadow: 0 5px 15px rgba(251, 37, 118, 0.4);
 }
 
-/* Light Mode Tweaks */
-
 /* ═══════════════════════════════
    History 2-Column Grid Layout
    ═══════════════════════════════ */
@@ -900,4 +1116,13 @@ input::placeholder {
   0% { box-shadow: 0 0 0px rgba(0,242,254,0); }
   50% { box-shadow: 0 0 10px rgba(0,242,254,0.3); }
   100% { box-shadow: 0 0 0px rgba(0,242,254,0); }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.spin {
+  animation: spin 1s linear infinite;
 }

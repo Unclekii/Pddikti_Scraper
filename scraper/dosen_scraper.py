@@ -8,6 +8,7 @@ import time
 import json
 import os
 import re
+import threading
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from openpyxl import Workbook
@@ -27,11 +28,11 @@ HEADERS = {
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
     "Accept": "application/json",
 }
-TIMEOUT = 30
-MAX_RETRIES = 3
-RETRY_DELAY = 2
-REQUEST_DELAY = 0.15
-MAX_WORKERS = 5
+TIMEOUT = int(os.environ.get("PDDIKTI_TIMEOUT", 30))
+MAX_RETRIES = int(os.environ.get("PDDIKTI_MAX_RETRIES", 3))
+RETRY_DELAY = int(os.environ.get("PDDIKTI_RETRY_DELAY", 2))
+REQUEST_DELAY = float(os.environ.get("PDDIKTI_REQUEST_DELAY", 0.15))
+MAX_WORKERS = int(os.environ.get("PDDIKTI_MAX_WORKERS", 5))
 
 COLOR_DOSEN_HEADER = "1F4E79"
 COLOR_DOSEN_ALT_ROW = "D6E4F0"
@@ -47,6 +48,21 @@ def normalize(name):
     name = name.upper()
     name = re.sub(r"[`'\u2018\u2019\u201A\u201B\u201C\u201D]", "", name)
     return " ".join(name.split())
+
+
+def _clean_provinsi(raw: str) -> str:
+    """Bersihkan nama provinsi dari API PDDikti.
+    Contoh: 'Prov. D.K.I. Jakarta' → 'DKI JAKARTA'
+            'Prov. Jawa Barat'     → 'JAWA BARAT'
+    """
+    if not raw:
+        return ""
+    s = str(raw).strip()
+    # Hilangkan prefix "Prov." / "Prov"
+    s = re.sub(r"^Prov\.?\s*", "", s, flags=re.IGNORECASE)
+    # Hilangkan titik dalam singkatan (D.K.I. → DKI, D.I. → DI)
+    s = s.replace(".", "")
+    return " ".join(s.split()).upper()
 
 
 def get_semesters(num_fallbacks=4):
@@ -76,7 +92,7 @@ def make_session():
     return s
 
 
-def fetch_api(session, endpoint, retries=MAX_RETRIES):
+def fetch_api(session, endpoint, retries=MAX_RETRIES, stop_event=None):
     url = f"{BASE_URL}/{endpoint}"
     last_err = None
     for attempt in range(retries):
@@ -90,15 +106,18 @@ def fetch_api(session, endpoint, retries=MAX_RETRIES):
         except requests.exceptions.Timeout as e:
             last_err = e
             if attempt < retries - 1:
-                time.sleep(RETRY_DELAY * (attempt + 1))
+                if stop_event: stop_event.wait(RETRY_DELAY * (attempt + 1))
+                else: time.sleep(RETRY_DELAY * (attempt + 1))
         except requests.exceptions.RequestException as e:
             last_err = e
             if attempt < retries - 1:
                 # Backoff lebih lama jika terkena Rate Limit 429
                 if e.response is not None and e.response.status_code == 429:
-                    time.sleep(5)
+                    if stop_event: stop_event.wait(5)
+                    else: time.sleep(5)
                 else:
-                    time.sleep(RETRY_DELAY * (attempt + 1))
+                    if stop_event: stop_event.wait(RETRY_DELAY * (attempt + 1))
+                    else: time.sleep(RETRY_DELAY * (attempt + 1))
         except json.JSONDecodeError:
             return None
             
@@ -109,9 +128,18 @@ def fetch_api(session, endpoint, retries=MAX_RETRIES):
 
 
 PT_CACHE = {}
+PT_CACHE_LOCK = threading.Lock()
 
 
-def get_pt_info(session, pt_query):
+def _fallback_pt_info(pt_query):
+    """Helper: kembalikan klasifikasi fallback dari nama PT saja (tanpa API)."""
+    info = classify_pt_from_name(pt_query)
+    info.setdefault("pembina", "")
+    info.setdefault("provinsi_pt", "")
+    return info
+
+
+def get_pt_info(session, pt_query, stop_event=None):
     """
     Mengidentifikasi: PTN/PTS, PTKIN/NON-PTKIN, DIKTI/DIKTIS.
 
@@ -126,34 +154,37 @@ def get_pt_info(session, pt_query):
     """
     if not pt_query or not pt_query.strip():
         return {}
-    if pt_query in PT_CACHE:
-        return PT_CACHE[pt_query]
+
+    # Thread-safe cache read
+    with PT_CACHE_LOCK:
+        if pt_query in PT_CACHE:
+            return PT_CACHE[pt_query]
+
+    def _cache_and_return(info):
+        with PT_CACHE_LOCK:
+            PT_CACHE[pt_query] = info
+        return info
 
     # ── Step 1: Cari ID kampus di PDDikti ─────────────────────────
     quoted_pt = urllib.parse.quote(pt_query)
-    results = fetch_api(session, f"pencarian/pt/{quoted_pt}")
+    results = fetch_api(session, f"pencarian/pt/{quoted_pt}", stop_event=stop_event)
     if not results:
-        # API tidak menemukan kampus → fallback klasifikasi dari nama
-        info = classify_pt_from_name(pt_query)
-        PT_CACHE[pt_query] = info
-        return info
+        return _cache_and_return(_fallback_pt_info(pt_query))
 
     pt_id = results[0].get("id")
     if not pt_id:
-        info = classify_pt_from_name(pt_query)
-        PT_CACHE[pt_query] = info
-        return info
+        return _cache_and_return(_fallback_pt_info(pt_query))
 
-    # ── Step 2: Ambil detail PT (pembina, kelompok) ───────────────
-    detail = fetch_api(session, f"pt/detail/{pt_id}")
+    # ── Step 2: Ambil detail PT (pembina, kelompok, provinsi) ─────
+    detail = fetch_api(session, f"pt/detail/{pt_id}", stop_event=stop_event)
     if not detail:
-        # Detail gagal → fallback klasifikasi dari nama
-        info = classify_pt_from_name(pt_query)
-        PT_CACHE[pt_query] = info
-        return info
+        return _cache_and_return(_fallback_pt_info(pt_query))
 
-    pembina = detail.get("pembina", "") or ""
-    kelompok = detail.get("kelompok", "") or ""
+    pembina = (detail.get("pembina") or "").strip()
+    kelompok = (detail.get("kelompok") or "").strip()
+    # FIX Bug #1: PDDikti /pt/detail/ menggunakan key "provinsi_pt", BUKAN "provinsi" / "nama_prov"
+    # FIX Bug #2: Clean prefix "Prov. " dan titik dalam singkatan
+    provinsi_pt = _clean_provinsi(detail.get("provinsi_pt", ""))
 
     # ── Step 3: Klasifikasi lengkap dengan data API ───────────────
     pt_upper = pt_query.upper().strip()
@@ -175,12 +206,13 @@ def get_pt_info(session, pt_query):
         "ptn_pts": "PTN" if is_negeri else "PTS",
         "ptkin_non": "PTKIN" if is_ptkin else "NON PTKIN",
         "dikti_diktis": "DIKTIS" if is_diktis_result else "DIKTI",
+        "pembina": pembina,
+        "provinsi_pt": provinsi_pt,
     }
-    PT_CACHE[pt_query] = info
-    return info
+    return _cache_and_return(info)
 
 
-def search_all_prodi(session, prodi_keywords, semester, cb):
+def search_all_prodi(session, prodi_keywords, cb, stop_event=None):
     cb("=" * 60)
     cb(f"STEP 1: Mencari {len(prodi_keywords)} Keyword Program Studi...")
     cb("=" * 60)
@@ -188,15 +220,20 @@ def search_all_prodi(session, prodi_keywords, semester, cb):
     norm_keywords = [normalize(k) for k in prodi_keywords]
 
     for keyword in prodi_keywords:
+        if stop_event and stop_event.is_set():
+            raise Exception("Scraping dihentikan oleh pengguna.")
         cb(f"\n🔍 Mencari: {keyword}")
-        time.sleep(REQUEST_DELAY)
+        if stop_event: stop_event.wait(REQUEST_DELAY)
+        else: time.sleep(REQUEST_DELAY)
         quoted_kw = urllib.parse.quote(keyword)
-        results = fetch_api(session, f"pencarian/prodi/{quoted_kw}")
+        results = fetch_api(session, f"pencarian/prodi/{quoted_kw}", stop_event=stop_event)
         if not results:
             cb(f"   ⚠️ Tidak ditemukan")
             continue
         count = 0
         for prodi in results:
+            if stop_event and stop_event.is_set():
+                break
             prodi_id = prodi.get("id", "")
             prodi_name = prodi.get("nama", "").strip().upper()
             if prodi_id in seen_ids:
@@ -212,30 +249,35 @@ def search_all_prodi(session, prodi_keywords, semester, cb):
             logical_key = f"{prodi_norm}|{jenjang}|{pt_name}".upper()
             if logical_key in seen_logical:
                 continue
-            time.sleep(REQUEST_DELAY)
-            detail = fetch_api(session, f"prodi/detail/{prodi_id}")
-            
+            if stop_event: stop_event.wait(REQUEST_DELAY)
+            else: time.sleep(REQUEST_DELAY)
+            detail = fetch_api(session, f"prodi/detail/{prodi_id}", stop_event=stop_event)
+
             # detail bisa None HANYA JIKA PDDikti mengembalikan 'Not Found' atau Error JSON Parse
             if detail is None:
                 continue
-                
-            status = detail.get("status", "") or ""
+
+            status = (detail.get("status") or "").strip()
             if status.upper() != "AKTIF":
                 continue
             seen_logical.add(logical_key)
-            pt_info = get_pt_info(session, pt_name)
+            pt_info = get_pt_info(session, pt_name, stop_event=stop_event)
+            # Fallback: gunakan provinsi dari PT detail kalau provinsi prodi kosong
+            # (detail sudah dijamin not None di atas, jadi akses langsung)
+            provinsi_val = _clean_provinsi(detail.get("provinsi", "")) or pt_info.get("provinsi_pt", "")
             all_prodi.append({
                 "id": prodi_id,
                 "nama": prodi.get("nama", ""),
                 "jenjang": jenjang,
                 "pt": pt_name,
                 "pt_singkat": prodi.get("pt_singkat", ""),
-                "keterangan": detail.get("status", "") if detail else "",
-                "akreditasi": detail.get("akreditasi", "") if detail else "",
-                "provinsi": detail.get("provinsi", "") if detail else "",
+                "keterangan": status,
+                "akreditasi": detail.get("akreditasi", ""),
+                "provinsi": provinsi_val,
                 "ptn_pts": pt_info.get("ptn_pts", ""),
                 "ptkin_non": pt_info.get("ptkin_non", ""),
                 "dikti_diktis": pt_info.get("dikti_diktis", ""),
+                "pembina": pt_info.get("pembina", ""),
             })
             count += 1
         cb(f"   ✅ {count} prodi baru (total: {len(all_prodi)})")
@@ -243,22 +285,26 @@ def search_all_prodi(session, prodi_keywords, semester, cb):
     return all_prodi
 
 
-def fetch_dosen_homebase(session, prodi_list, semester, fallbacks, cb):
+def fetch_dosen_homebase(session, prodi_list, semester, fallbacks, cb, stop_event=None):
     cb("\n" + "=" * 60)
     cb("STEP 2: Mengambil daftar dosen homebase per prodi")
     cb("=" * 60)
     all_dosen, seen_nidn, failed = [], set(), []
     for i, prodi in enumerate(prodi_list, 1):
+        if stop_event and stop_event.is_set():
+            raise Exception("Scraping dihentikan oleh pengguna.")
         prodi_id = prodi["id"]
         label = f"{prodi['nama']} ({prodi['jenjang']}) - {prodi['pt']}"
         cb(f"\n[{i}/{len(prodi_list)}] {label}")
-        time.sleep(REQUEST_DELAY)
-        dosen_list = fetch_api(session, f"dosen/homebase/{prodi_id}?semester={semester}")
+        if stop_event: stop_event.wait(REQUEST_DELAY)
+        else: time.sleep(REQUEST_DELAY)
+        dosen_list = fetch_api(session, f"dosen/homebase/{prodi_id}?semester={semester}", stop_event=stop_event)
         sem_used = semester
         if not dosen_list:
             for prev in fallbacks:
-                time.sleep(REQUEST_DELAY)
-                dosen_list = fetch_api(session, f"dosen/homebase/{prodi_id}?semester={prev}")
+                if stop_event: stop_event.wait(REQUEST_DELAY)
+                else: time.sleep(REQUEST_DELAY)
+                dosen_list = fetch_api(session, f"dosen/homebase/{prodi_id}?semester={prev}", stop_event=stop_event)
                 if dosen_list:
                     cb(f"   ℹ️ Menggunakan semester {prev}")
                     sem_used = prev
@@ -271,6 +317,8 @@ def fetch_dosen_homebase(session, prodi_list, semester, fallbacks, cb):
         prodi["semester_lapor"] = sem_used
         count_new = 0
         for d in dosen_list:
+            if stop_event and stop_event.is_set():
+                break
             nidn = d.get("nidn", "")
             nuptk = d.get("nuptk", "")
             nama = d.get("nama_dosen", "")
@@ -293,7 +341,7 @@ def fetch_dosen_homebase(session, prodi_list, semester, fallbacks, cb):
     return all_dosen
 
 
-def fetch_single_profile(session, dosen):
+def fetch_single_profile(session, dosen, stop_event=None):
     nidn = dosen.get("nidn", "")
     nuptk = dosen.get("nuptk", "")
     nama = dosen.get("nama_dosen", "")
@@ -309,8 +357,9 @@ def fetch_single_profile(session, dosen):
     search_key = nidn if nidn else (nuptk if nuptk else nama)
     if not search_key:
         return result
-    time.sleep(REQUEST_DELAY)
-    search_results = fetch_api(session, f"pencarian/dosen/{search_key}")
+    if stop_event: stop_event.wait(REQUEST_DELAY)
+    else: time.sleep(REQUEST_DELAY)
+    search_results = fetch_api(session, f"pencarian/dosen/{search_key}", stop_event=stop_event)
     if not search_results:
         return result
     search_id = None
@@ -323,8 +372,9 @@ def fetch_single_profile(session, dosen):
             search_id = sr.get("id", ""); break
     if not search_id:
         return result
-    time.sleep(REQUEST_DELAY)
-    profile = fetch_api(session, f"dosen/profile/{search_id}")
+    if stop_event: stop_event.wait(REQUEST_DELAY)
+    else: time.sleep(REQUEST_DELAY)
+    profile = fetch_api(session, f"dosen/profile/{search_id}", stop_event=stop_event)
     if profile and isinstance(profile, dict):
         profile_nidn = profile.get("nidn_dosen", "") or profile.get("nidn", "")
         profile_nuptk = profile.get("nuptk", "")
@@ -348,15 +398,18 @@ def fetch_single_profile(session, dosen):
     return result
 
 
-def fetch_all_profiles(session, dosen_list, cb):
+def fetch_all_profiles(session, dosen_list, cb, stop_event=None):
     cb("\n" + "=" * 60)
     cb(f"STEP 3: Mengambil profil detail {len(dosen_list)} dosen...")
     cb("=" * 60)
     all_profiles, completed, failed = [], 0, 0
     start = time.time()
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-        futures = {executor.submit(fetch_single_profile, session, d): i + 1 for i, d in enumerate(dosen_list)}
+        futures = {executor.submit(fetch_single_profile, session, d, stop_event): i + 1 for i, d in enumerate(dosen_list)}
         for future in as_completed(futures):
+            if stop_event and stop_event.is_set():
+                executor.shutdown(wait=False, cancel_futures=True)
+                raise Exception("Scraping dihentikan oleh pengguna.")
             completed += 1
             try:
                 all_profiles.append(future.result())
@@ -445,7 +498,8 @@ def export_to_excel(profiles, prodi_list, semester, output_dir, cb):
     ws2 = wb.create_sheet("Daftar Prodi")
     p_cols = ["No", "Nama Prodi", "Jenjang", "Perguruan Tinggi", "Jumlah Dosen",
               "Keterangan", "Akreditasi Program Studi", "PTN/PTS",
-              "PTKIN/NON PTKIN", "DIKTI/DIKTIS", "Provinsi", "Semester Laporan Terakhir"]
+              "PTKIN/NON PTKIN", "DIKTI/DIKTIS", "Pembina", "Provinsi",
+              "Semester Laporan Terakhir"]
     mc2 = len(p_cols)
     ws2.merge_cells(start_row=1, start_column=1, end_row=1, end_column=mc2)
     ws2.cell(1, 1, "📋 DAFTAR PROGRAM STUDI PILIHAN").font = Font(name="Calibri", bold=True, color=COLOR_PRODI_TITLE, size=14)
@@ -463,7 +517,8 @@ def export_to_excel(profiles, prodi_list, semester, output_dir, cb):
         count = prodi_count.get(key, 0)
         vals = [i, prodi["nama"], prodi["jenjang"], prodi["pt"], count,
                 prodi.get("keterangan"), prodi.get("akreditasi"), prodi.get("ptn_pts"),
-                prodi.get("ptkin_non"), prodi.get("dikti_diktis"), prodi.get("provinsi"),
+                prodi.get("ptkin_non"), prodi.get("dikti_diktis"),
+                prodi.get("pembina"), prodi.get("provinsi"),
                 prodi.get("semester_lapor", "Belum Lapor")]
         for col, val in enumerate(vals, 1):
             ws2.cell(row, col, val)
@@ -481,9 +536,11 @@ def export_to_excel(profiles, prodi_list, semester, output_dir, cb):
     return filename
 
 
-def run_dosen_scraper(prodi_keywords, output_dir, callback):
+def run_dosen_scraper(prodi_keywords, output_dir, callback, stop_event=None):
     """Entry point. prodi_keywords: list of prodi name strings."""
-    PT_CACHE.clear()
+    # Thread-safe clear of PT_CACHE
+    with PT_CACHE_LOCK:
+        PT_CACHE.clear()
 
     # ── Auto-refresh whitelist PTKIN dari SPAN-PTKIN (sekali per sesi) ──
     refresh_ptkin_whitelist(log_fn=callback)
@@ -494,15 +551,15 @@ def run_dosen_scraper(prodi_keywords, output_dir, callback):
     callback(f"⚙️  Keywords terpilih: {len(prodi_keywords)}")
     callback(f"⚙️  Max Workers: {MAX_WORKERS}\n")
 
-    prodi_list = search_all_prodi(session, prodi_keywords, semester, callback)
+    prodi_list = search_all_prodi(session, prodi_keywords, callback, stop_event)
     if not prodi_list:
         raise Exception("Tidak ada prodi ditemukan. Periksa koneksi internet atau keyword.")
 
-    dosen_list = fetch_dosen_homebase(session, prodi_list, semester, fallbacks, callback)
+    dosen_list = fetch_dosen_homebase(session, prodi_list, semester, fallbacks, callback, stop_event)
     if not dosen_list:
         raise Exception("Tidak ada dosen ditemukan.")
 
-    profiles = fetch_all_profiles(session, dosen_list, callback)
+    profiles = fetch_all_profiles(session, dosen_list, callback, stop_event)
     filename = export_to_excel(profiles, prodi_list, semester, output_dir, callback)
 
     callback(f"\n🎉 SELESAI! Total dosen: {len(profiles)}, Total prodi: {len(prodi_list)}")

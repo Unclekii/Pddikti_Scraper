@@ -2,9 +2,9 @@
 //  APEX Dashboard — Premium Frontend Script
 // ═══════════════════════════════════════════
 
-let allProdi = [];          
-let filteredProdi = [];     
-let selectedProdi = new Set(); 
+let allProdi = [];
+let filteredProdi = [];
+let selectedProdi = new Set();
 let currentBidang = 'semua';
 let activeEventSource = null;
 
@@ -13,8 +13,8 @@ let activeEventSource = null;
 // ──────────────────────────────────────────
 function switchTab(tabId) {
   // Update UI State
-  document.querySelectorAll('.view-section').forEach(el => el.style.display = 'none');
-  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.view-section').forEach((el) => (el.style.display = 'none'));
+  document.querySelectorAll('.nav-item').forEach((el) => el.classList.remove('active'));
 
   const targetView = document.getElementById(`view-${tabId}`);
   if (targetView) targetView.style.display = 'block';
@@ -25,7 +25,7 @@ function switchTab(tabId) {
   // Update Header Text
   const title = document.getElementById('page-title');
   const subtitle = document.getElementById('page-subtitle');
-  
+
   if (tabId === 'scraping') {
     title.textContent = 'Home Scraping';
     subtitle.textContent = 'Kelola pengambilan data program studi dan dosen.';
@@ -69,17 +69,17 @@ async function fetchProdi() {
 
 function renderBidangFilters() {
   const container = document.getElementById('bidang-filters');
-  const bidangSet = new Set(allProdi.map(p => p.bidang));
+  const bidangSet = new Set(allProdi.map((p) => p.bidang));
   container.innerHTML = '';
   container.style.display = 'flex';
-  
+
   const allPill = document.createElement('button');
   allPill.className = 'pill-modern' + (currentBidang === 'semua' ? ' active' : '');
   allPill.textContent = 'Semua Bidang';
   allPill.onclick = () => filterBidang('semua', allPill);
   container.appendChild(allPill);
 
-  bidangSet.forEach(bidang => {
+  bidangSet.forEach((bidang) => {
     const pill = document.createElement('button');
     pill.className = 'pill-modern' + (currentBidang === bidang ? ' active' : '');
     pill.textContent = bidang;
@@ -90,17 +90,19 @@ function renderBidangFilters() {
 
 function filterBidang(bidang, el) {
   currentBidang = bidang;
-  document.querySelectorAll('.pill-modern').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.pill-modern').forEach((p) => p.classList.remove('active'));
   el.classList.add('active');
   document.getElementById('search-input').value = '';
   applyFilters();
 }
 
-function filterList() { applyFilters(); }
+function filterList() {
+  applyFilters();
+}
 
 function applyFilters() {
   const q = document.getElementById('search-input').value.trim().toLowerCase();
-  filteredProdi = allProdi.filter(p => {
+  filteredProdi = allProdi.filter((p) => {
     const matchBidang = currentBidang === 'semua' || p.bidang === currentBidang;
     const matchSearch = !q || p.nama_prodi.toLowerCase().includes(q);
     return matchBidang && matchSearch;
@@ -115,16 +117,16 @@ function renderProdiList() {
     return;
   }
   container.innerHTML = '';
-  filteredProdi.forEach(p => {
+  filteredProdi.forEach((p) => {
     const isChecked = selectedProdi.has(p.nama_prodi);
     const item = document.createElement('div');
     item.className = 'prodi-item' + (isChecked ? ' checked' : '');
-    
+
     // Custom Checkbox Structure with static SVG for instant performance
     const customCb = document.createElement('div');
     customCb.className = 'custom-cb';
     customCb.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>`;
-    
+
     const nameEl = document.createElement('span');
     nameEl.className = 'prodi-name';
     nameEl.textContent = p.nama_prodi;
@@ -137,7 +139,7 @@ function renderProdiList() {
     item.appendChild(customCb);
     item.appendChild(nameEl);
     item.appendChild(bTag);
-    
+
     item.onclick = () => {
       const currentlyChecked = selectedProdi.has(p.nama_prodi);
       if (!currentlyChecked) {
@@ -150,7 +152,7 @@ function renderProdiList() {
       updateCountBadge();
       renderSelectedSummary();
     };
-    
+
     container.appendChild(item);
   });
   updateCountBadge();
@@ -158,7 +160,7 @@ function renderProdiList() {
 }
 
 function selectAll() {
-  filteredProdi.forEach(p => selectedProdi.add(p.nama_prodi));
+  filteredProdi.forEach((p) => selectedProdi.add(p.nama_prodi));
   renderProdiList();
 }
 
@@ -176,9 +178,9 @@ function renderSelectedSummary() {
   }
   container.style.display = 'block';
   tagsContainer.innerHTML = '';
-  selectedProdi.forEach(name => {
+  selectedProdi.forEach((name) => {
     const tag = document.createElement('div');
-    tag.style = "background: rgba(63, 94, 251, 0.1); border: 1px solid var(--accent-blue); color: var(--accent-blue); padding: 4px 10px; border-radius: 50px; font-size: 11px; display: flex; align-items: center; gap: 6px; font-weight: 500;";
+    tag.style = 'background: rgba(63, 94, 251, 0.1); border: 1px solid var(--accent-blue); color: var(--accent-blue); padding: 4px 10px; border-radius: 50px; font-size: 11px; display: flex; align-items: center; gap: 6px; font-weight: 500;';
     tag.innerHTML = `<span>${name}</span><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="cursor:pointer;" onclick="event.stopPropagation(); selectedProdi.delete('${name}'); renderProdiList();"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>`;
     tagsContainer.appendChild(tag);
   });
@@ -200,11 +202,13 @@ async function runScraper() {
   const status = document.getElementById('run-status');
   const logWrapper = document.getElementById('log-wrapper');
   const logBox = document.getElementById('log-box');
-  
+
   btn.disabled = true;
   logWrapper.style.display = 'block';
   logBox.innerHTML = '';
   setStatus(status, 'running', 'Initializing engine...');
+  document.getElementById('btn-stop').style.display = 'flex';
+  let jobId = null;
 
   try {
     const res = await fetch('/api/run-scraper', {
@@ -214,9 +218,16 @@ async function runScraper() {
     });
     const json = await res.json();
     if (!json.success) throw new Error(json.error);
+    jobId = json.job_id;
+    window.currentJobId = jobId; // Store for stop function
 
     if (activeEventSource) activeEventSource.close();
     activeEventSource = new EventSource(`/api/stream/${json.job_id}`);
+
+    activeEventSource.onerror = (err) => {
+      console.error('SSE Error:', err);
+      appendLog('⚠️ Koneksi terputus. Mencoba menyambung kembali...');
+    };
 
     activeEventSource.onmessage = (e) => {
       const data = JSON.parse(e.data);
@@ -226,15 +237,52 @@ async function runScraper() {
         showDownload(data.filename);
         activeEventSource.close();
         loadHistory();
+        document.getElementById('btn-stop').style.display = 'none';
+        btn.disabled = false;
+        window.currentJobId = null;
       }
       if (data.type === 'error') {
-        setStatus(status, 'error', `Failure: ${data.message}`);
+        if (data.message.includes('dihentikan')) {
+          setStatus(status, 'cancelled', 'Scraping Berhasil Dibatalkan');
+          appendLog('🛑 Proses dihentikan sepenuhnya.');
+        } else {
+          setStatus(status, 'error', `Failure: ${data.message}`);
+        }
         activeEventSource.close();
+        document.getElementById('btn-stop').style.display = 'none';
+        btn.disabled = false;
+        window.currentJobId = null;
       }
     };
   } catch (err) {
     appendLog('❌ Error: ' + err.message);
     btn.disabled = false;
+    document.getElementById('btn-stop').style.display = 'none';
+  }
+}
+
+async function stopScraper() {
+  if (!window.currentJobId) return;
+  const btnStop = document.getElementById('btn-stop');
+  btnStop.disabled = true;
+  btnStop.textContent = 'Stopping...';
+
+  try {
+    const res = await fetch(`/api/stop-scraper/${window.currentJobId}`, { method: 'POST' });
+    const json = await res.json();
+    if (json.success) {
+      appendLog('⏳ Mengirim sinyal berhenti ke engine...');
+      btnStop.innerHTML = '<i data-lucide="loader-2" class="spin"></i> Memproses Batal...';
+      if (window.lucide) lucide.createIcons();
+    } else {
+      appendLog('❌ Gagal menghentikan: ' + json.error);
+    }
+  } catch (err) {
+    appendLog('❌ Error stopping: ' + err.message);
+  } finally {
+    btnStop.disabled = false;
+    btnStop.innerHTML = '<i data-lucide="square"></i> Batalkan Scraping';
+    if (window.lucide) lucide.createIcons();
   }
 }
 
@@ -267,12 +315,14 @@ async function loadHistory() {
 
   try {
     const res = await fetch('/api/outputs');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const files = await res.json();
-    
+    if (!Array.isArray(files)) throw new Error('Invalid response format');
+
     // Calculate Stats
     let totalSize = 0;
     let lastModified = 0;
-    files.forEach(f => {
+    files.forEach((f) => {
       totalSize += f.size;
       if (f.modified > lastModified) lastModified = f.modified;
     });
@@ -283,20 +333,20 @@ async function loadHistory() {
     if (lastSyncEl) lastSyncEl.textContent = lastModified ? new Date(lastModified * 1000).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }) : '-';
     if (archiveCountEl) archiveCountEl.textContent = `${files.length} FILES`;
 
-    if (!files.length) { 
-      container.innerHTML = '<div style="text-align:center; padding: 40px; color: var(--text-dim);">Archive is empty</div>'; 
-      return; 
+    if (!files.length) {
+      container.innerHTML = '<div style="text-align:center; padding: 40px; color: var(--text-dim);">Archive is empty</div>';
+      return;
     }
-    
+
     container.innerHTML = '';
-    files.forEach(f => {
+    files.forEach((f) => {
       const dateStr = new Date(f.modified * 1000).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' });
       const sizeStr = (f.size / 1024).toFixed(1) + ' KB';
       const fileExt = f.name.split('.').pop().toUpperCase();
-      
+
       const item = document.createElement('div');
       item.className = 'history-item';
-      
+
       item.innerHTML = `
         <div class="file-status-circle" title="File Ready">
           <i data-lucide="check" class="status-check"></i>
@@ -323,14 +373,31 @@ async function loadHistory() {
       container.appendChild(item);
     });
     if (window.lucide) lucide.createIcons();
-  } catch(e) {
-    console.error("History fail:", e);
+  } catch (e) {
+    console.error('History fail:', e);
+    if (container) {
+      container.innerHTML = `<div style="text-align:center; padding: 40px; color: #ff6b6b;">
+        ⚠️ Gagal memuat arsip: ${e.message}<br>
+        <button onclick="loadHistory()" style="margin-top:10px; padding:6px 14px; cursor:pointer; background: var(--accent-blue); color:white; border:none; border-radius:6px;">Coba Lagi</button>
+      </div>`;
+    }
+    if (archiveCountEl) archiveCountEl.textContent = 'ERROR';
   }
 }
 
 async function deleteHistoryFile(filename) {
   if (!confirm(`Delete ${filename}?`)) return;
-  await fetch(`/api/delete-file/${filename}`, { method: 'DELETE' });
+  try {
+    const res = await fetch(`/api/delete-file/${filename}`, { method: 'DELETE' });
+    const json = await res.json();
+    if (!json.success) {
+      alert('Gagal menghapus: ' + (json.error || 'Unknown error'));
+      return;
+    }
+  } catch (e) {
+    alert('Error menghapus file: ' + e.message);
+    return;
+  }
   loadHistory();
 }
 
@@ -338,9 +405,6 @@ function setStatus(el, type, text) {
   el.textContent = text;
   el.className = 'status-pill ' + type;
 }
-
-
-
 
 window.addEventListener('DOMContentLoaded', () => {
   loadHistory();
