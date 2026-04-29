@@ -50,10 +50,75 @@ COLOR_PRODI_TITLE = "2E8B57"   # Sea Green
 
 
 def normalize(name):
-    """Normalize prodi name for comparison: uppercase, remove special chars."""
+    """
+    Normalize nama prodi untuk perbandingan:
+      - Uppercase
+      - Hapus semua varian apostrophe: ' ` \u2018 \u2019 dll.
+      - Normalisasi spasi
+
+    Contoh:
+      'Akuntansi Syari\'ah'  → 'AKUNTANSI SYARIAH'
+      'Akuntansi Syari`ah'   → 'AKUNTANSI SYARIAH'
+      'Akuntansi Syariah'    → 'AKUNTANSI SYARIAH'
+    Ketiganya identik setelah normalisasi — JANGAN ubah logika ini.
+    """
     name = name.upper()
     name = re.sub(r"[`'\u2018\u2019\u201A\u201B\u201C\u201D]", "", name)
     return " ".join(name.split())
+
+
+def _generate_subqueries(keyword: str) -> list[str]:
+    """
+    Hasilkan daftar sub-query fallback untuk keyword panjang yang
+    mengembalikan 0 hasil dari API PDDikti.
+
+    Strategi: coba versi pendek dari keyword dengan membuang
+    satu kata dari awal atau dari akhir secara bergantian.
+
+    Contoh:
+      'Akuntansi Lembaga Keuangan Syariah'
+      → ['Lembaga Keuangan Syariah', 'Akuntansi Lembaga Keuangan']
+    """
+    words = keyword.split()
+    if len(words) <= 2:
+        return []
+    subqueries = []
+    # Buang kata pertama
+    subqueries.append(" ".join(words[1:]))
+    # Buang kata terakhir
+    if len(words) > 3:
+        subqueries.append(" ".join(words[:-1]))
+    # Deduplicate, pertahankan urutan
+    seen = set()
+    result = []
+    for sq in subqueries:
+        if sq not in seen:
+            seen.add(sq)
+            result.append(sq)
+    return result
+
+
+def _strict_match(keyword_norm: str, prodi_norm: str) -> bool:
+    """
+    Pencocokan ketat: SEMUA kata penting (>3 karakter) dari keyword
+    harus muncul di nama prodi.
+
+    Digunakan saat fallback sub-query aktif agar hasil sub-query
+    yang lebih luas tidak menangkap prodi yang tidak relevan.
+
+    Contoh:
+      keyword_norm: 'AKUNTANSI LEMBAGA KEUANGAN SYARIAH'
+      prodi_norm:   'AKUNTANSI LEMBAGA KEUANGAN SYARIAH'
+      → semua kata penting ada → True
+
+      prodi_norm:   'KEUANGAN SYARIAH'
+      → kata 'AKUNTANSI' dan 'LEMBAGA' tidak ada → False
+    """
+    sig_words = [w for w in keyword_norm.split() if len(w) > 3]
+    if not sig_words:
+        return False
+    return all(w in prodi_norm for w in sig_words)
+
 
 
 def _clean_provinsi(raw: str) -> str:
@@ -239,6 +304,8 @@ def search_all_prodi(session, prodi_keywords, cb, stop_event=None):
     cb(f"STEP 1: Mencari {len(prodi_keywords)} Keyword Program Studi...")
     cb("=" * 60)
     all_prodi, seen_ids, seen_logical = [], set(), set()
+    # norm_keywords dipakai di mode normal — menangani varian apostrophe
+    # (syari'ah / syari`ah / syariah → semua disamakan oleh normalize())
     norm_keywords = [normalize(k) for k in prodi_keywords]
 
     for keyword in prodi_keywords:
@@ -247,11 +314,34 @@ def search_all_prodi(session, prodi_keywords, cb, stop_event=None):
         cb(f"\n🔍 Mencari: {keyword}")
         if stop_event: stop_event.wait(REQUEST_DELAY)
         else: time.sleep(REQUEST_DELAY)
+
         quoted_kw = urllib.parse.quote(keyword)
         results = fetch_api(session, f"pencarian/prodi/{quoted_kw}", stop_event=stop_event)
+
+        # ── Fallback sub-query: aktif HANYA saat API return 0 hasil ─────────
+        # Untuk keyword panjang (>2 kata), coba versi lebih pendek.
+        # Mode strict_mode = True agar filter lebih ketat — mencegah false positive.
+        # normalize() TIDAK DIUBAH — varian apostrophe tetap tercover.
+        strict_mode = False
+        kn_this = normalize(keyword)  # keyword saat ini, untuk strict matching
+
+        if not results and len(keyword.split()) > 2:
+            for subq in _generate_subqueries(keyword):
+                if stop_event and stop_event.is_set():
+                    break
+                if stop_event: stop_event.wait(REQUEST_DELAY)
+                else: time.sleep(REQUEST_DELAY)
+                cb(f"   🔄 Fallback: mencari '{subq}'...")
+                results = fetch_api(session, f"pencarian/prodi/{urllib.parse.quote(subq)}", stop_event=stop_event)
+                if results:
+                    strict_mode = True
+                    cb(f"   ✅ Hasil ditemukan via fallback '{subq}'")
+                    break
+
         if not results:
-            cb(f"   ⚠️ Tidak ditemukan")
+            cb(f"   ⚠️ Tidak ditemukan (termasuk semua fallback)")
             continue
+
         count = 0
         for prodi in results:
             if stop_event and stop_event.is_set():
@@ -261,11 +351,22 @@ def search_all_prodi(session, prodi_keywords, cb, stop_event=None):
             if prodi_id in seen_ids:
                 continue
             seen_ids.add(prodi_id)
-            # Normalized matching to handle apostrophe variants
+
+            # Normalized matching — normalize() menghapus apostrophe sehingga
+            # 'Syari\'ah', 'Syari`ah', 'Syariah' semua jadi 'SYARIAH' → MATCH
             prodi_norm = normalize(prodi_name)
-            is_valid = any(kn in prodi_norm or prodi_norm == kn for kn in norm_keywords)
+
+            if strict_mode:
+                # Mode fallback: semua kata penting dari keyword asli harus ada
+                # di nama prodi (mencegah sub-query terlalu lebar)
+                is_valid = _strict_match(kn_this, prodi_norm)
+            else:
+                # Mode normal: prodi name mengandung salah satu keyword
+                is_valid = any(kn in prodi_norm or prodi_norm == kn for kn in norm_keywords)
+
             if not is_valid:
                 continue
+
             pt_name = prodi.get("pt", "")
             jenjang = prodi.get("jenjang", "")
             logical_key = f"{prodi_norm}|{jenjang}|{pt_name}".upper()
@@ -284,8 +385,6 @@ def search_all_prodi(session, prodi_keywords, cb, stop_event=None):
                 continue
             seen_logical.add(logical_key)
             pt_info = get_pt_info(session, pt_name, stop_event=stop_event)
-            # Fallback: gunakan provinsi dari PT detail kalau provinsi prodi kosong
-            # (detail sudah dijamin not None di atas, jadi akses langsung)
             provinsi_val = _clean_provinsi(detail.get("provinsi", "")) or pt_info.get("provinsi_pt", "")
             all_prodi.append({
                 "id": prodi_id,
