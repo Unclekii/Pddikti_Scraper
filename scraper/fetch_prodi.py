@@ -24,7 +24,7 @@ HEADERS = {
 }
 
 TIMEOUT = int(os.environ.get("PDDIKTI_TIMEOUT", 30))
-MAX_RETRIES = int(os.environ.get("PDDIKTI_MAX_RETRIES", 3))
+MAX_RETRIES = max(1, int(os.environ.get("PDDIKTI_MAX_RETRIES", 3)))
 RETRY_DELAY = int(os.environ.get("PDDIKTI_RETRY_DELAY", 2))
 
 

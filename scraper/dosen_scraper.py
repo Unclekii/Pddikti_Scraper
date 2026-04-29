@@ -8,28 +8,34 @@ import time
 import json
 import os
 import re
+import sys
 import threading
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
-import collections
 import urllib.parse
 try:
-    from scraper.diktis_data import is_diktis, refresh_ptkin_whitelist, classify_pt_from_name, PTKIN_SET
+    from scraper.diktis_data import (
+        is_diktis, refresh_ptkin_whitelist, classify_pt_from_name,
+        classify_from_pembina, PTKIN_SET,
+    )
 except ImportError:
-    from diktis_data import is_diktis, refresh_ptkin_whitelist, classify_pt_from_name, PTKIN_SET
+    from diktis_data import (
+        is_diktis, refresh_ptkin_whitelist, classify_pt_from_name,
+        classify_from_pembina, PTKIN_SET,
+    )
 
 BASE_URL = "https://api-pddikti.kemdiktisaintek.go.id"
 HEADERS = {
     "Origin": "https://pddikti.kemdiktisaintek.go.id",
     "Referer": "https://pddikti.kemdiktisaintek.go.id/",
-    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
     "Accept": "application/json",
 }
 TIMEOUT = int(os.environ.get("PDDIKTI_TIMEOUT", 30))
-MAX_RETRIES = int(os.environ.get("PDDIKTI_MAX_RETRIES", 3))
+MAX_RETRIES = max(1, int(os.environ.get("PDDIKTI_MAX_RETRIES", 3)))
 RETRY_DELAY = int(os.environ.get("PDDIKTI_RETRY_DELAY", 2))
 REQUEST_DELAY = float(os.environ.get("PDDIKTI_REQUEST_DELAY", 0.15))
 MAX_WORKERS = int(os.environ.get("PDDIKTI_MAX_WORKERS", 5))
@@ -143,10 +149,12 @@ def get_pt_info(session, pt_query, stop_event=None):
     """
     Mengidentifikasi: PTN/PTS, PTKIN/NON-PTKIN, DIKTI/DIKTIS.
 
-    Strategi DIKTI/DIKTIS (Opsi C — 3 Lapis):
-      Layer 1: Exact-match whitelist PTKIN resmi (diktis_data.py)
-      Layer 2: Keyword pada nama kampus (UIN, IAIN, STAI, dll.)
-      Layer 3: Keyword kolom 'pembina' dari PDDikti API (fallback heuristik)
+    Strategi klasifikasi (2-tier):
+      Primary : classify_from_pembina() — klasifikasi langsung dari field
+                'pembina' API PDDikti (sumber paling otoritatif).
+                PTA Islam Negeri/Swasta → DIKTIS, LLDIKTI/PTN → DIKTI.
+      Fallback: Heuristik 3-lapis saat pembina kosong / tidak dikenal
+                (whitelist PTKIN → keyword nama → keyword pembina/kelompok)
 
     Jika API PDDikti gagal di tahap mana pun (timeout / not found),
     fungsi tetap mengembalikan klasifikasi best-effort dari nama PT
@@ -182,24 +190,38 @@ def get_pt_info(session, pt_query, stop_event=None):
 
     pembina = (detail.get("pembina") or "").strip()
     kelompok = (detail.get("kelompok") or "").strip()
-    # FIX Bug #1: PDDikti /pt/detail/ menggunakan key "provinsi_pt", BUKAN "provinsi" / "nama_prov"
-    # FIX Bug #2: Clean prefix "Prov. " dan titik dalam singkatan
     provinsi_pt = _clean_provinsi(detail.get("provinsi_pt", ""))
-
-    # ── Step 3: Klasifikasi lengkap dengan data API ───────────────
     pt_upper = pt_query.upper().strip()
 
-    # FORCE IDENTITY: Jika ada di Whitelist SPAN-PTKIN, statusnya mutlak (Absolut)
+    # ── Step 3A (Primary): Klasifikasi langsung dari field pembina ──
+    # Field pembina dari PDDikti API adalah sumber paling otoritatif:
+    #   "PTA Islam Negeri"  → DIKTIS, PTN, PTKIN   (Kemenag)
+    #   "PTA Islam Swasta"  → DIKTIS, PTS, NON PTKIN (Kemenag)
+    #   "LLDIKTI [X]"       → DIKTI,  PTS, NON PTKIN (Kemendikbudristek)
+    #   "PTN"               → DIKTI,  PTN, NON PTKIN (Kemendikbudristek)
+    cls = classify_from_pembina(pembina)
+    if cls:
+        # Safety net: jika kampus ada di whitelist PTKIN tapi pembina-nya
+        # tidak terduga (edge case saat data PDDikti belum di-update)
+        if pt_upper in PTKIN_SET and cls["ptkin_non"] != "PTKIN":
+            cls["ptkin_non"] = "PTKIN"
+            cls["ptn_pts"] = "PTN"
+            cls["dikti_diktis"] = "DIKTIS"
+        info = {**cls, "pembina": pembina, "provinsi_pt": provinsi_pt}
+        return _cache_and_return(info)
+
+    # ── Step 3B (Fallback): Heuristik saat pembina kosong / tidak dikenal ──
     if pt_upper in PTKIN_SET:
         is_negeri = True
         is_ptkin = True
     else:
-        # Fallback heuristik PDDikti jika bukan PTKIN Kemenag
         is_negeri = ("NEGERI" in pembina.upper() or "NEGERI" in kelompok.upper())
-        is_islam_pembina = any(k in pembina.upper() for k in ["ISLAM", "AGAMA"])
-        is_ptkin = is_negeri and is_islam_pembina
+        is_islam_check = (
+            any(k in pembina.upper() for k in ["ISLAM", "AGAMA"])
+            or any(k in kelompok.upper() for k in ["ISLAM", "AGAMA"])
+        )
+        is_ptkin = is_negeri and is_islam_check
 
-    # DIKTI/DIKTIS: 3-layer check (berlaku mutlak untuk semuanya)
     is_diktis_result = is_diktis(pt_query, pembina=pembina, kelompok=kelompok)
 
     info = {
@@ -386,7 +408,7 @@ def fetch_single_profile(session, dosen, stop_event=None):
         if profil_nama and nama:
             t1 = set(w for w in nama.lower().split() if len(w) > 2)
             t2 = set(w for w in profil_nama.lower().split() if len(w) > 2)
-            if t1 and t2 and len(t1 & t2) == 0:
+            if t1 and t2 and t1.isdisjoint(t2):
                 return result
         result["Nama"] = profile.get("nama_dosen", nama)
         result["Perguruan Tinggi"] = profile.get("nama_pt", result["Perguruan Tinggi"])
@@ -408,7 +430,11 @@ def fetch_all_profiles(session, dosen_list, cb, stop_event=None):
         futures = {executor.submit(fetch_single_profile, session, d, stop_event): i + 1 for i, d in enumerate(dosen_list)}
         for future in as_completed(futures):
             if stop_event and stop_event.is_set():
-                executor.shutdown(wait=False, cancel_futures=True)
+                # cancel_futures hanya tersedia sejak Python 3.9
+                if sys.version_info >= (3, 9):
+                    executor.shutdown(wait=False, cancel_futures=True)
+                else:
+                    executor.shutdown(wait=False)
                 raise Exception("Scraping dihentikan oleh pengguna.")
             completed += 1
             try:
@@ -538,9 +564,9 @@ def export_to_excel(profiles, prodi_list, semester, output_dir, cb):
 
 def run_dosen_scraper(prodi_keywords, output_dir, callback, stop_event=None):
     """Entry point. prodi_keywords: list of prodi name strings."""
-    # Thread-safe clear of PT_CACHE
-    with PT_CACHE_LOCK:
-        PT_CACHE.clear()
+    # PT_CACHE bersifat additive (data PT tidak berubah antar sesi),
+    # sehingga TIDAK perlu di-clear — ini juga mencegah corruption
+    # jika ada dua job berjalan bersamaan (C2 fix).
 
     # ── Auto-refresh whitelist PTKIN dari SPAN-PTKIN (sekali per sesi) ──
     refresh_ptkin_whitelist(log_fn=callback)

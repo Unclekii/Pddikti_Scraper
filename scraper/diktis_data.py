@@ -58,8 +58,8 @@ PTKIN_NAMES = {
     "UIN SULTAN AJI MUHAMMAD IDRIS SAMARINDA",
     "UIN PALANGKA RAYA",
     "UIN MATARAM",
-    "UIN ALAUDDIN MAKASAR",
-    "UIN ALAUDDIN MAKASSAR",
+    "UIN ALAUDDIN MAKASAR",    # Alias defensif — PDDikti kadang pakai ejaan tanpa double-S
+    "UIN ALAUDDIN MAKASSAR",   # Ejaan resmi
     "UIN DATOKARAMA PALU",
     "UIN PALOPO",
     "UIN ABDUL MUTHALIB SANGADJI AMBON",
@@ -210,6 +210,8 @@ DIKTIS_NAME_KEYWORDS = [
 
 # ─────────────────────────────────────────────────────────────────
 # KEYWORD dalam field PEMBINA dari PDDikti API → DIKTIS
+# Digunakan sebagai fallback (Layer 3) saat pembina tidak cocok
+# dengan pola utama classify_from_pembina().
 # ─────────────────────────────────────────────────────────────────
 DIKTIS_PEMBINA_KEYWORDS = [
     "KEMENTERIAN AGAMA",
@@ -220,7 +222,62 @@ DIKTIS_PEMBINA_KEYWORDS = [
     "DIREKTORAT JENDERAL PENDIDIKAN ISLAM",
     "DIRJEN PENDIS",
     "PENDIDIKAN ISLAM",
+    "PTA ISLAM",        # PTA Islam Negeri & PTA Islam Swasta (nilai aktual PDDikti API)
 ]
+
+
+# ─────────────────────────────────────────────────────────────────
+# PRIMARY CLASSIFICATION — Langsung dari field 'pembina' PDDikti
+# ─────────────────────────────────────────────────────────────────
+def classify_from_pembina(pembina: str) -> dict | None:
+    """
+    Klasifikasi LANGSUNG dari field 'pembina' API PDDikti.
+
+    Field pembina dari PDDikti memiliki 4 nilai tetap yang sudah
+    merupakan sumber otoritatif untuk klasifikasi:
+
+      "LLDIKTI [X]"       → DIKTI,  PTS, NON PTKIN  (Kemendikbudristek)
+      "PTN"               → DIKTI,  PTN, NON PTKIN  (Kemendikbudristek)
+      "PTA Islam Negeri"  → DIKTIS, PTN, PTKIN       (Kemenag)
+      "PTA Islam Swasta"  → DIKTIS, PTS, NON PTKIN   (Kemenag)
+      (blank/lainnya)     → None   (fallback ke heuristik)
+
+    Returns:
+        dict dengan keys ptn_pts, ptkin_non, dikti_diktis
+        atau None jika pembina kosong / tidak dikenali.
+    """
+    if not pembina or not pembina.strip():
+        return None
+
+    p = pembina.upper().strip()
+
+    # ── PTA Islam (Kemenag) ──
+    if p.startswith("PTA ISLAM"):
+        is_negeri = "NEGERI" in p
+        return {
+            "ptn_pts": "PTN" if is_negeri else "PTS",
+            "ptkin_non": "PTKIN" if is_negeri else "NON PTKIN",
+            "dikti_diktis": "DIKTIS",
+        }
+
+    # ── LLDIKTI (Kemendikbudristek — PTS) ──
+    if p.startswith("LLDIKTI"):
+        return {
+            "ptn_pts": "PTS",
+            "ptkin_non": "NON PTKIN",
+            "dikti_diktis": "DIKTI",
+        }
+
+    # ── PTN (Kemendikbudristek — Negeri) ──
+    if p == "PTN":
+        return {
+            "ptn_pts": "PTN",
+            "ptkin_non": "NON PTKIN",
+            "dikti_diktis": "DIKTI",
+        }
+
+    # Nilai pembina tidak dikenali → fallback ke heuristik
+    return None
 
 
 def classify_pt_from_name(pt_name: str) -> dict:
@@ -234,7 +291,7 @@ def classify_pt_from_name(pt_name: str) -> dict:
     Keterbatasan:
       - PTN/PTS hanya bisa disimpulkan jika kampus ada di whitelist PTKIN
         atau namanya mengandung kata 'NEGERI'. Jika tidak, default ke 'PTS'.
-      - DIKTI/DIKTIS tetap akurat lewat Layer 2 & 3 is_diktis().
+      - DIKTI/DIKTIS tetap akurat lewat Layer 1 & 2 is_diktis().
     """
     pt_upper = pt_name.upper().strip()
 
@@ -244,7 +301,7 @@ def classify_pt_from_name(pt_name: str) -> dict:
     # PTKIN: hanya jika ada di whitelist resmi (paling reliable)
     is_ptkin_guess = pt_upper in PTKIN_SET
 
-    # DIKTI/DIKTIS: tetap gunakan 3-layer penuh
+    # DIKTI/DIKTIS: tetap gunakan heuristik nama
     is_diktis_val = is_diktis(pt_name)
 
     return {
@@ -258,7 +315,10 @@ def is_diktis(pt_name: str, pembina: str = "", kelompok: str = "") -> bool:
     """
     Menentukan apakah sebuah Perguruan Tinggi berada di bawah naungan DIKTIS (Kemenag).
 
-    Strategi (Opsi C — 3 Lapis):
+    Digunakan sebagai FALLBACK saat classify_from_pembina() gagal
+    (pembina kosong / tidak dikenali).
+
+    Strategi (3 Lapis):
       Layer 1: Exact-match PTKIN_SET (whitelist statis + hasil auto-refresh saat startup)
       Layer 2: Keyword substring pada nama kampus (UIN, IAIN, STAI, dll.)
       Layer 3: Keyword kolom 'pembina'/'kelompok' dari PDDikti API
@@ -282,3 +342,4 @@ def is_diktis(pt_name: str, pembina: str = "", kelompok: str = "") -> bool:
         return True
 
     return False
+

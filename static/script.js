@@ -181,7 +181,40 @@ function renderSelectedSummary() {
   selectedProdi.forEach((name) => {
     const tag = document.createElement('div');
     tag.style = 'background: rgba(63, 94, 251, 0.1); border: 1px solid var(--accent-blue); color: var(--accent-blue); padding: 4px 10px; border-radius: 50px; font-size: 11px; display: flex; align-items: center; gap: 6px; font-weight: 500;';
-    tag.innerHTML = `<span>${name}</span><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="cursor:pointer;" onclick="event.stopPropagation(); selectedProdi.delete('${name}'); renderProdiList();"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>`;
+
+    // Safe: menggunakan textContent agar nama prodi tidak di-parse sebagai HTML
+    const nameSpan = document.createElement('span');
+    nameSpan.textContent = name;
+
+    // SVG close button via namespace-aware DOM API — aman dari XSS
+    const svgNS = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(svgNS, 'svg');
+    svg.setAttribute('width', '12');
+    svg.setAttribute('height', '12');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('fill', 'none');
+    svg.setAttribute('stroke', 'currentColor');
+    svg.setAttribute('stroke-width', '3');
+    svg.setAttribute('stroke-linecap', 'round');
+    svg.setAttribute('stroke-linejoin', 'round');
+    svg.style.cursor = 'pointer';
+    svg.style.flexShrink = '0';
+    const path1 = document.createElementNS(svgNS, 'path');
+    path1.setAttribute('d', 'M18 6 6 18');
+    const path2 = document.createElementNS(svgNS, 'path');
+    path2.setAttribute('d', 'm6 6 12 12');
+    svg.appendChild(path1);
+    svg.appendChild(path2);
+
+    // Event listener aman — closure menangkap `name` tanpa string interpolation
+    svg.addEventListener('click', (e) => {
+      e.stopPropagation();
+      selectedProdi.delete(name);
+      renderProdiList();
+    });
+
+    tag.appendChild(nameSpan);
+    tag.appendChild(svg);
     tagsContainer.appendChild(tag);
   });
 }

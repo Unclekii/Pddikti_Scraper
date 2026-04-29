@@ -3,6 +3,7 @@ import uuid
 import queue
 import threading
 import json
+import time
 from flask import Flask, render_template, request, jsonify, Response, send_from_directory
 
 app = Flask(__name__)
@@ -17,16 +18,23 @@ JOBS_LOCK = threading.Lock()
 
 def cleanup_stale_jobs():
     """Background task to remove jobs older than 1 hour to prevent memory leaks."""
-    import time
     while True:
-        time.sleep(600) # Run every 10 minutes
+        time.sleep(600)  # Run every 10 minutes
         now = time.time()
         with JOBS_LOCK:
             stale_ids = [jid for jid, info in JOBS.items() if now - info.get('start_time', 0) > 3600]
             for jid in stale_ids:
                 del JOBS[jid]
 
-threading.Thread(target=cleanup_stale_jobs, daemon=True).start()
+_cleanup_started = False
+
+@app.before_request
+def _start_cleanup_once():
+    """Lazy-start cleanup thread on first request — compatible with Gunicorn pre-fork workers."""
+    global _cleanup_started
+    if not _cleanup_started:
+        _cleanup_started = True
+        threading.Thread(target=cleanup_stale_jobs, daemon=True).start()
 
 
 # ──────────────────────────────────────────────
@@ -71,7 +79,6 @@ def api_run_scraper():
     job_id = str(uuid.uuid4())
     q = queue.Queue()
     stop_event = threading.Event()
-    import time
     with JOBS_LOCK:
         JOBS[job_id] = {
             "queue": q, 
@@ -85,8 +92,12 @@ def api_run_scraper():
         from scraper.dosen_scraper import run_dosen_scraper
         try:
             def cb(msg):
-                if not stop_event.is_set():
-                    q.put({"type": "log", "message": str(msg)})
+                # Non-blocking put: tetap kirim log meski stop_event aktif
+                # agar log terakhir (cancellation) tidak hilang
+                try:
+                    q.put({"type": "log", "message": str(msg)}, block=False)
+                except queue.Full:
+                    pass  # Queue penuh — skip daripada deadlock
 
             filename = run_dosen_scraper(prodi_keywords, OUTPUT_DIR, cb, stop_event)
             with JOBS_LOCK:
@@ -140,9 +151,8 @@ def api_stream(job_id):
                     yield "data: {\"type\": \"heartbeat\"}\n\n"
         finally:
             # Clean up tracking dictionary to prevent Memory Leak
-            # We give a small grace period for the worker to finish its status update
-            import time
-            time.sleep(0.5) 
+            # Grace period agar worker sempat update status sebelum cleanup
+            time.sleep(0.5)
             with JOBS_LOCK:
                 if job_id in JOBS:
                     del JOBS[job_id]
