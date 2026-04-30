@@ -10,8 +10,10 @@
   <link
     href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
     rel="stylesheet" />
-  <link rel="stylesheet" href="/static/style.css?v=1.1" />
+  <link rel="stylesheet" href="/static/style.css?v=2.9" />
   <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
 </head>
 
 <body>
@@ -36,6 +38,13 @@
         </div>
         <div class="nav-item" id="tab-history" onclick="switchTab('history')">
           <i data-lucide="folder-archive"></i> <span>Hasil & Riwayat</span>
+        </div>
+        <div class="nav-separator"></div>
+        <div class="nav-item" id="tab-analytics-dosen" onclick="switchTab('analytics-dosen')">
+          <i data-lucide="bar-chart-3"></i> <span>Analisis Dosen</span>
+        </div>
+        <div class="nav-item" id="tab-analytics-prodi" onclick="switchTab('analytics-prodi')">
+          <i data-lucide="pie-chart"></i> <span>Analisis Prodi</span>
         </div>
       </nav>
 
@@ -106,6 +115,7 @@
               style="display:none; background: rgba(255,255,255,0.02); border: 1px dashed var(--border-glass); padding: 12px; border-radius: 12px; margin-bottom: 15px;">
               <span class="text-sub small" style="margin-bottom: 8px; display: block;">Daftar Pilihan:</span>
               <div id="selected-tags" class="selected-tags" style="display: flex; flex-wrap: wrap; gap: 8px;"></div>
+              <button id="tags-toggle-btn" class="tags-toggle-btn" style="display:none;" onclick="toggleTagsExpand()"></button>
             </div>
 
             <div style="display: flex; gap: 10px; margin-bottom: 15px;">
@@ -142,17 +152,49 @@
 
             <div style="display: flex; gap: 24px; align-items: flex-start; flex-wrap: wrap;">
               <div style="flex: 1; min-width: 250px;">
-                <button id="btn-run" class="control-btn btn-primary" onclick="runScraper()" disabled>
+                <button id="btn-run" class="control-btn btn-primary" onclick="runScraper()" disabled title="Ctrl+Enter">
                   <i data-lucide="play"></i> Jalankan scraper
                 </button>
-                <button id="btn-stop" class="control-btn btn-danger" onclick="stopScraper()" style="display:none; margin-top: 12px;">
+                <button id="btn-stop" class="control-btn btn-danger" onclick="stopScraper()" style="display:none; margin-top: 12px;" title="Escape">
                   <i data-lucide="square"></i> Batalkan Scraping
                 </button>
                 <div id="run-status" class="status-pill" style="margin-top:15px; width: 100%; text-align: center;">
                   Menunggu pilihan prodi</div>
+
+                <!-- B3: Progress Bar -->
+                <div id="progress-container" class="progress-container" style="display:none; margin-top: 16px;">
+                  <div class="progress-header">
+                    <div class="progress-steps" id="progress-steps">
+                      <span class="pstep" data-step="1">Search</span>
+                      <span class="pstep" data-step="2">Dosen</span>
+                      <span class="pstep" data-step="3">Profil</span>
+                      <span class="pstep" data-step="4">Excel</span>
+                    </div>
+                    <span class="progress-pct" id="progress-pct">0%</span>
+                  </div>
+                  <div class="progress-track">
+                    <div class="progress-fill" id="progress-fill" style="width: 0%;"></div>
+                  </div>
+                  <div class="progress-label" id="progress-label">Memulai...</div>
+                </div>
               </div>
               <div id="log-wrapper" class="log-wrapper"
                 style="flex: 2; min-width: 300px; display:none; background: #060a14; border: 1px solid var(--border-glass); border-radius: 12px; overflow: hidden;">
+                <!-- U3: Log Toolbar -->
+                <div class="log-toolbar">
+                  <div class="log-toolbar-left">
+                    <span class="log-toolbar-title">Console Output</span>
+                  </div>
+                  <div class="log-toolbar-right">
+                    <input type="text" id="log-search-input" placeholder="Filter log..." class="log-search-input" oninput="filterLog()" />
+                    <button class="log-tool-btn" onclick="copyLog()" title="Copy All">
+                      <i data-lucide="copy" style="width:14px;height:14px;"></i>
+                    </button>
+                    <button class="log-tool-btn" onclick="clearLog()" title="Clear">
+                      <i data-lucide="trash-2" style="width:14px;height:14px;"></i>
+                    </button>
+                  </div>
+                </div>
                 <div class="log-box" id="log-box"
                   style="height: 250px; padding: 16px; overflow-y: auto; font-family: 'JetBrains Mono'; font-size: 12px; color: #00ffab;">
                 </div>
@@ -234,10 +276,192 @@
         </div>
       </div>
 
+      <!-- ── VIEW 3: ANALISIS DOSEN ── -->
+      <div id="view-analytics-dosen" class="view-section" style="display: none;">
+        <!-- File Selector -->
+        <div class="analytics-file-selector">
+          <label for="dosen-file-select"><i data-lucide="file-spreadsheet" style="width:16px;"></i> Pilih file untuk dianalisis:</label>
+          <select id="dosen-file-select" onchange="loadAnalytics('dosen')">
+            <option value="">— Pilih file Excel —</option>
+          </select>
+        </div>
+
+        <!-- Empty state -->
+        <div id="dosen-empty" class="analytics-empty">
+          <i data-lucide="bar-chart-3" style="width:64px;height:64px;color:var(--text-dim);"></i>
+          <h3>Analisis Data Dosen</h3>
+          <p>Pilih file Excel hasil scraping di atas untuk memulai analisis.</p>
+        </div>
+
+        <!-- Loading state -->
+        <div id="dosen-loading" class="analytics-empty" style="display:none;">
+          <div class="loader-spinner"></div>
+          <h3 style="color: var(--accent-pink);">Sedang Memuat Data...</h3>
+          <p>Memproses file Excel, mohon tunggu sebentar.</p>
+        </div>
+
+        <!-- Analytics Content (hidden until file loaded) -->
+        <div id="dosen-analytics-content" style="display:none;">
+          <!-- KPI Row -->
+          <div class="kpi-row" id="dosen-kpi-row"></div>
+          <!-- Charts Grid -->
+          <div class="analytics-grid">
+            <div class="premium-card chart-card-half" id="dosen-chart-gender-card">
+              <div class="chart-title">Distribusi Gender</div>
+              <div class="chart-wrap-sm"><canvas id="chart-dosen-gender"></canvas></div>
+            </div>
+            <div class="premium-card chart-card-half" id="dosen-chart-education-card">
+              <div class="chart-title">Pendidikan Terakhir</div>
+              <div class="chart-wrap-sm"><canvas id="chart-dosen-education"></canvas></div>
+            </div>
+            <div class="premium-card chart-card-half" id="dosen-chart-jabatan-card">
+              <div class="chart-title">Jabatan Fungsional</div>
+              <div class="chart-wrap-sm"><canvas id="chart-dosen-jabatan"></canvas></div>
+            </div>
+            <div class="premium-card chart-card-half" id="dosen-chart-kepegawaian-card">
+              <div class="chart-title">Status Kepegawaian</div>
+              <div class="chart-wrap-sm"><canvas id="chart-dosen-kepegawaian"></canvas></div>
+            </div>
+            <div class="premium-card chart-card-full" id="dosen-chart-crossgender-card">
+              <div class="chart-title">Gender × Jabatan Fungsional</div>
+              <div class="chart-wrap-md"><canvas id="chart-dosen-crossgender"></canvas></div>
+            </div>
+            <div class="premium-card chart-card-full" id="dosen-chart-toppt-card">
+              <div class="chart-title">Top 10 Perguruan Tinggi (by Jumlah Dosen)</div>
+              <div class="chart-wrap-md"><canvas id="chart-dosen-toppt"></canvas></div>
+            </div>
+            <div class="premium-card chart-card-half" id="dosen-chart-status-card">
+              <div class="chart-title">Status Aktivitas</div>
+              <div class="chart-wrap-sm"><canvas id="chart-dosen-status"></canvas></div>
+            </div>
+            <div class="premium-card chart-card-half" id="dosen-chart-ikatan-card">
+              <div class="chart-title">Status Ikatan Kerja</div>
+              <div class="chart-wrap-sm"><canvas id="chart-dosen-ikatan"></canvas></div>
+            </div>
+          </div>
+          <!-- Data Table -->
+          <div class="premium-card" style="margin-top:24px;">
+            <div class="chart-title" style="display:flex;justify-content:space-between;align-items:center;">
+              <span>Data Table — Dosen</span>
+              <input type="text" id="dosen-table-search" placeholder="Search table..." class="table-search-input" oninput="filterDosenTable()" />
+            </div>
+            <div class="data-table-wrap">
+              <table class="data-table" id="dosen-data-table">
+                <thead><tr id="dosen-table-head"></tr></thead>
+                <tbody id="dosen-table-body"></tbody>
+              </table>
+            </div>
+            <div class="table-pagination" id="dosen-pagination"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── VIEW 4: ANALISIS PRODI ── -->
+      <div id="view-analytics-prodi" class="view-section" style="display: none;">
+        <!-- File Selector -->
+        <div class="analytics-file-selector">
+          <label for="prodi-file-select"><i data-lucide="file-spreadsheet" style="width:16px;"></i> Pilih file untuk dianalisis:</label>
+          <select id="prodi-file-select" onchange="loadAnalytics('prodi')">
+            <option value="">— Pilih file Excel —</option>
+          </select>
+        </div>
+
+        <!-- Empty state -->
+        <div id="prodi-empty" class="analytics-empty">
+          <i data-lucide="pie-chart" style="width:64px;height:64px;color:var(--text-dim);"></i>
+          <h3>Analisis Program Studi</h3>
+          <p>Pilih file Excel hasil scraping di atas untuk memulai analisis.</p>
+        </div>
+
+        <!-- Loading state -->
+        <div id="prodi-loading" class="analytics-empty" style="display:none;">
+          <div class="loader-spinner"></div>
+          <h3 style="color: var(--accent-pink);">Sedang Memuat Data...</h3>
+          <p>Memproses file Excel, mohon tunggu sebentar.</p>
+        </div>
+
+        <!-- Analytics Content -->
+        <div id="prodi-analytics-content" style="display:none;">
+          <div class="kpi-row" id="prodi-kpi-row"></div>
+          <div class="analytics-grid">
+            <div class="premium-card chart-card-half">
+              <div class="chart-title">Distribusi Akreditasi</div>
+              <div class="chart-wrap-sm"><canvas id="chart-prodi-akreditasi"></canvas></div>
+            </div>
+            <div class="premium-card chart-card-half">
+              <div class="chart-title">Distribusi Jenjang</div>
+              <div class="chart-wrap-sm"><canvas id="chart-prodi-jenjang"></canvas></div>
+            </div>
+            <div class="premium-card chart-card-full">
+              <div class="chart-title">Klasifikasi Perguruan Tinggi</div>
+              <div class="trifecta-row">
+                <div class="trifecta-item"><div class="chart-wrap-xs"><canvas id="chart-prodi-ptnpts"></canvas></div><span>PTN / PTS</span></div>
+                <div class="trifecta-item"><div class="chart-wrap-xs"><canvas id="chart-prodi-ptkin"></canvas></div><span>PTKIN / NON</span></div>
+                <div class="trifecta-item"><div class="chart-wrap-xs"><canvas id="chart-prodi-diktis"></canvas></div><span>DIKTI / DIKTIS</span></div>
+              </div>
+            </div>
+            <div class="premium-card chart-card-full">
+              <div class="chart-title">Top 10 Provinsi (by Jumlah Prodi)</div>
+              <div class="chart-wrap-md"><canvas id="chart-prodi-provinsi"></canvas></div>
+            </div>
+            <div class="premium-card chart-card-half">
+              <div class="chart-title">Rata-rata Dosen per Akreditasi</div>
+              <div class="chart-wrap-sm"><canvas id="chart-prodi-avgdosen"></canvas></div>
+            </div>
+            <div class="premium-card chart-card-half">
+              <div class="chart-title">Status Pelaporan Semester</div>
+              <div class="chart-wrap-sm"><canvas id="chart-prodi-semester"></canvas></div>
+            </div>
+            <div class="premium-card chart-card-full">
+              <div class="chart-title">Jenjang × Akreditasi</div>
+              <div class="chart-wrap-md"><canvas id="chart-prodi-jenjangakred"></canvas></div>
+            </div>
+          </div>
+          <!-- Data Table -->
+          <div class="premium-card" style="margin-top:24px;">
+            <div class="chart-title" style="display:flex;justify-content:space-between;align-items:center;">
+              <span>Data Table — Program Studi</span>
+              <input type="text" id="prodi-table-search" placeholder="Search table..." class="table-search-input" oninput="filterProdiTable()" />
+            </div>
+            <div class="data-table-wrap">
+              <table class="data-table" id="prodi-data-table">
+                <thead><tr id="prodi-table-head"></tr></thead>
+                <tbody id="prodi-table-body"></tbody>
+              </table>
+            </div>
+            <div class="table-pagination" id="prodi-pagination"></div>
+          </div>
+        </div>
+      </div>
+
     </main>
   </div>
 
-  <script src="/static/script.js?v=1.1"></script>
+  <!-- U1: Toast Container -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <!-- U2: Confirmation Modal -->
+  <div id="confirm-modal" class="modal-overlay" style="display:none;">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3><i data-lucide="alert-circle" style="width:20px;vertical-align:middle;margin-right:8px;color:var(--accent-cyan);"></i>Konfirmasi Scraping</h3>
+        <button class="modal-close" onclick="closeConfirmModal()">×</button>
+      </div>
+      <div class="modal-body">
+        <p id="confirm-summary"></p>
+        <div id="confirm-prodi-list" class="confirm-prodi-list"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="control-btn btn-secondary" onclick="closeConfirmModal()" style="width:auto;padding:10px 24px;">Batal</button>
+        <button class="control-btn btn-primary" onclick="confirmAndRun()" style="width:auto;padding:10px 24px;" id="btn-confirm-run">
+          <i data-lucide="play" style="width:16px;"></i> Mulai Scraping
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/script.js?v=2.9"></script>
+  <script src="/static/analytics.js?v=2.9"></script>
 </body>
 
 </html>

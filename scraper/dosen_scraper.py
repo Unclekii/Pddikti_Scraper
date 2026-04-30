@@ -200,6 +200,7 @@ def fetch_api(session, endpoint, retries=MAX_RETRIES, stop_event=None):
 
 PT_CACHE = {}
 PT_CACHE_LOCK = threading.Lock()
+PT_CACHE_TTL = int(os.environ.get("PDDIKTI_CACHE_TTL", 1800))  # 30 menit default
 
 
 def _fallback_pt_info(pt_query):
@@ -228,14 +229,18 @@ def get_pt_info(session, pt_query, stop_event=None):
     if not pt_query or not pt_query.strip():
         return {}
 
-    # Thread-safe cache read
+    # Thread-safe cache read with TTL
     with PT_CACHE_LOCK:
         if pt_query in PT_CACHE:
-            return PT_CACHE[pt_query]
+            entry = PT_CACHE[pt_query]
+            if time.time() - entry["ts"] < PT_CACHE_TTL:
+                return entry["data"]
+            # TTL expired — refetch dari API
+            del PT_CACHE[pt_query]
 
     def _cache_and_return(info):
         with PT_CACHE_LOCK:
-            PT_CACHE[pt_query] = info
+            PT_CACHE[pt_query] = {"data": info, "ts": time.time()}
         return info
 
     # ── Step 1: Cari ID kampus di PDDikti ─────────────────────────
@@ -303,14 +308,16 @@ def search_all_prodi(session, prodi_keywords, cb, stop_event=None):
     cb("=" * 60)
     cb(f"STEP 1: Mencari {len(prodi_keywords)} Keyword Program Studi...")
     cb("=" * 60)
+    cb({"__progress__": True, "step": 1, "current": 0, "total": len(prodi_keywords), "label": "Search Prodi"})
     all_prodi, seen_ids, seen_logical = [], set(), set()
     # norm_keywords dipakai di mode normal — menangani varian apostrophe
     # (syari'ah / syari`ah / syariah → semua disamakan oleh normalize())
     norm_keywords = [normalize(k) for k in prodi_keywords]
 
-    for keyword in prodi_keywords:
+    for kw_idx, keyword in enumerate(prodi_keywords, 1):
         if stop_event and stop_event.is_set():
             raise Exception("Scraping dihentikan oleh pengguna.")
+        cb({"__progress__": True, "step": 1, "current": kw_idx, "total": len(prodi_keywords), "label": "Search Prodi"})
         cb(f"\n🔍 Mencari: {keyword}")
         if stop_event: stop_event.wait(REQUEST_DELAY)
         else: time.sleep(REQUEST_DELAY)
@@ -410,10 +417,12 @@ def fetch_dosen_homebase(session, prodi_list, semester, fallbacks, cb, stop_even
     cb("\n" + "=" * 60)
     cb("STEP 2: Mengambil daftar dosen homebase per prodi")
     cb("=" * 60)
+    cb({"__progress__": True, "step": 2, "current": 0, "total": len(prodi_list), "label": "Fetch Dosen"})
     all_dosen, seen_nidn, failed = [], set(), []
     for i, prodi in enumerate(prodi_list, 1):
         if stop_event and stop_event.is_set():
             raise Exception("Scraping dihentikan oleh pengguna.")
+        cb({"__progress__": True, "step": 2, "current": i, "total": len(prodi_list), "label": "Fetch Dosen"})
         prodi_id = prodi["id"]
         label = f"{prodi['nama']} ({prodi['jenjang']}) - {prodi['pt']}"
         cb(f"\n[{i}/{len(prodi_list)}] {label}")
@@ -523,6 +532,7 @@ def fetch_all_profiles(session, dosen_list, cb, stop_event=None):
     cb("\n" + "=" * 60)
     cb(f"STEP 3: Mengambil profil detail {len(dosen_list)} dosen...")
     cb("=" * 60)
+    cb({"__progress__": True, "step": 3, "current": 0, "total": len(dosen_list), "label": "Profil Dosen"})
     all_profiles, completed, failed = [], 0, 0
     start = time.time()
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
@@ -541,6 +551,7 @@ def fetch_all_profiles(session, dosen_list, cb, stop_event=None):
             except Exception:
                 failed += 1
             if completed % 50 == 0 or completed == len(dosen_list):
+                cb({"__progress__": True, "step": 3, "current": completed, "total": len(dosen_list), "label": "Profil Dosen"})
                 elapsed = time.time() - start
                 rate = completed / elapsed if elapsed > 0 else 1
                 eta = (len(dosen_list) - completed) / rate
@@ -584,6 +595,7 @@ def export_to_excel(profiles, prodi_list, semester, output_dir, cb):
     cb("\n" + "=" * 60)
     cb("STEP 4: Membuat file Excel...")
     cb("=" * 60)
+    cb({"__progress__": True, "step": 4, "current": 0, "total": 1, "label": "Export Excel"})
     wb = Workbook()
     wb.remove(wb.active)
     time_str = datetime.now().strftime("%d %B %Y, %H:%M WIB")
@@ -640,8 +652,13 @@ def export_to_excel(profiles, prodi_list, semester, output_dir, cb):
         row = 3 + i
         key = f"{prodi['nama'].upper()}|{prodi['pt'].upper()}"
         count = prodi_count.get(key, 0)
+        
+        akred_map = {"A": "Unggul", "B": "Baik Sekali", "C": "Baik"}
+        akred_raw = prodi.get("akreditasi", "")
+        akred_val = akred_map.get(akred_raw, akred_raw)
+
         vals = [i, prodi["nama"], prodi["jenjang"], prodi["pt"], count,
-                prodi.get("keterangan"), prodi.get("akreditasi"), prodi.get("ptn_pts"),
+                prodi.get("keterangan"), akred_val, prodi.get("ptn_pts"),
                 prodi.get("ptkin_non"), prodi.get("dikti_diktis"),
                 prodi.get("pembina"), prodi.get("provinsi"),
                 prodi.get("semester_lapor", "Belum Lapor")]

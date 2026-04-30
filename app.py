@@ -5,6 +5,8 @@ import threading
 import json
 import time
 from flask import Flask, render_template, request, jsonify, Response, send_from_directory
+from functools import wraps
+from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
 
@@ -24,6 +26,9 @@ def cleanup_stale_jobs():
         with JOBS_LOCK:
             stale_ids = [jid for jid, info in JOBS.items() if now - info.get('start_time', 0) > 3600]
             for jid in stale_ids:
+                event = JOBS[jid].get("event")
+                if event:
+                    event.set()
                 del JOBS[jid]
 
 _cleanup_started = False
@@ -38,14 +43,38 @@ def _start_cleanup_once():
 
 
 # ──────────────────────────────────────────────
+# B4: OPTIONAL BASIC AUTH
+# ──────────────────────────────────────────────
+AUTH_KEY = os.environ.get("PDDIKTI_AUTH_KEY", "").strip()
+
+def check_auth(f):
+    """Decorator: enforce Basic Auth only if PDDIKTI_AUTH_KEY env var is set."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not AUTH_KEY:
+            return f(*args, **kwargs)
+        auth = request.authorization
+        if not auth or auth.username != "admin" or auth.password != AUTH_KEY:
+            return Response(
+                "Akses ditolak. Masukkan kredensial yang benar.",
+                401,
+                {"WWW-Authenticate": 'Basic realm="PDDikti Dashboard"'},
+            )
+        return f(*args, **kwargs)
+    return decorated
+
+
+# ──────────────────────────────────────────────
 # ROUTES
 # ──────────────────────────────────────────────
 @app.route("/")
+@check_auth
 def index():
     return render_template("index.html")
 
 
 @app.route("/api/fetch-prodi")
+@check_auth
 def api_fetch_prodi():
     """Fetch all prodi from all bidang ilmu."""
     from scraper.fetch_prodi import fetch_all_prodi
@@ -58,6 +87,7 @@ def api_fetch_prodi():
 
 
 @app.route("/api/run-scraper", methods=["POST"])
+@check_auth
 def api_run_scraper():
     """Start dosen scraping job with selected prodi keywords."""
     # Robust JSON parsing: dukung payload object {"prodi":[...]} maupun array langsung [...]
@@ -92,6 +122,14 @@ def api_run_scraper():
         from scraper.dosen_scraper import run_dosen_scraper
         try:
             def cb(msg):
+                # B3: Structured progress messages
+                if isinstance(msg, dict) and msg.get("__progress__"):
+                    try:
+                        q.put({"type": "progress", "step": msg["step"], "current": msg["current"],
+                               "total": msg["total"], "label": msg["label"]}, block=False)
+                    except queue.Full:
+                        pass
+                    return
                 # Non-blocking put: tetap kirim log meski stop_event aktif
                 # agar log terakhir (cancellation) tidak hilang
                 try:
@@ -119,6 +157,7 @@ def api_run_scraper():
 
 
 @app.route("/api/stop-scraper/<job_id>", methods=["POST"])
+@check_auth
 def api_stop_scraper(job_id):
     """Stop an active scraping job."""
     with JOBS_LOCK:
@@ -150,12 +189,9 @@ def api_stream(job_id):
                 except queue.Empty:
                     yield "data: {\"type\": \"heartbeat\"}\n\n"
         finally:
-            # Clean up tracking dictionary to prevent Memory Leak
-            # Grace period agar worker sempat update status sebelum cleanup
-            time.sleep(0.5)
-            with JOBS_LOCK:
-                if job_id in JOBS:
-                    del JOBS[job_id]
+            # DO NOT DELETE FROM JOBS! If the SSE stream disconnects, 
+            # the background worker should continue running.
+            pass
 
     return Response(
         generate(),
@@ -165,6 +201,7 @@ def api_stream(job_id):
 
 
 @app.route("/api/outputs")
+@check_auth
 def api_outputs():
     """List output Excel files."""
     files = []
@@ -187,19 +224,22 @@ def api_outputs():
     return jsonify(files)
 
 
+# B5: Download endpoint hardening — validasi konsisten dengan delete endpoint
 @app.route("/api/download/<filename>")
+@check_auth
 def api_download(filename):
     """Download an output Excel file."""
+    filename = secure_filename(filename)
+    if not filename.lower().endswith(".xlsx"):
+        return jsonify({"success": False, "error": "Only .xlsx files can be downloaded"}), 400
     return send_from_directory(OUTPUT_DIR, filename, as_attachment=True)
 
 
 @app.route("/api/delete-file/<filename>", methods=["DELETE"])
+@check_auth
 def api_delete_file(filename):
     """Delete an output Excel file (.xlsx only)."""
-    # Validasi path traversal
-    if ".." in filename or "/" in filename or "\\" in filename:
-        return jsonify({"success": False, "error": "Invalid filename"}), 400
-    # Enforce ekstensi .xlsx saja — hindari hapus file lain
+    filename = secure_filename(filename)
     if not filename.lower().endswith(".xlsx"):
         return jsonify({"success": False, "error": "Only .xlsx files can be deleted"}), 400
     try:
@@ -210,6 +250,69 @@ def api_delete_file(filename):
         return jsonify({"success": False, "error": "File not found"}), 404
     except Exception as e:
         app.logger.exception("delete-file failed")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+# ──────────────────────────────────────────────
+# ANALYTICS API — Parse Excel & return JSON
+# ──────────────────────────────────────────────
+@app.route("/api/analyze/<filename>")
+@check_auth
+def api_analyze(filename):
+    """Parse an output Excel file and return both sheets as JSON for analytics."""
+    filename = secure_filename(filename)
+    if not filename.lower().endswith(".xlsx"):
+        return jsonify({"success": False, "error": "Only .xlsx files"}), 400
+
+    fp = os.path.join(OUTPUT_DIR, filename)
+    if not os.path.exists(fp):
+        return jsonify({"success": False, "error": "File not found"}), 404
+
+    try:
+        from openpyxl import load_workbook
+        wb = load_workbook(fp, read_only=True, data_only=True)
+
+        result = {"dosen": [], "prodi": [], "metadata": {"filename": filename}}
+
+        # --- Parse Sheet "Data Dosen" ---
+        if "Data Dosen" in wb.sheetnames:
+            ws = wb["Data Dosen"]
+            # Header di baris 5
+            headers = []
+            for cell in ws[5]:
+                headers.append(cell.value)
+            for row in ws.iter_rows(min_row=6, values_only=True):
+                if not row or row[0] is None:
+                    continue
+                record = {}
+                for i, val in enumerate(row):
+                    if i < len(headers) and headers[i]:
+                        record[headers[i]] = val if val is not None else ""
+                result["dosen"].append(record)
+
+        # --- Parse Sheet "Daftar Prodi" ---
+        if "Daftar Prodi" in wb.sheetnames:
+            ws2 = wb["Daftar Prodi"]
+            # Header di baris 3
+            headers2 = []
+            for cell in ws2[3]:
+                headers2.append(cell.value)
+            for row in ws2.iter_rows(min_row=4, values_only=True):
+                if not row or row[0] is None:
+                    continue
+                record = {}
+                for i, val in enumerate(row):
+                    if i < len(headers2) and headers2[i]:
+                        record[headers2[i]] = val if val is not None else ""
+                result["prodi"].append(record)
+
+        wb.close()
+        result["metadata"]["total_dosen"] = len(result["dosen"])
+        result["metadata"]["total_prodi"] = len(result["prodi"])
+        return jsonify({"success": True, **result})
+
+    except Exception as e:
+        app.logger.exception("analyze failed")
         return jsonify({"success": False, "error": str(e)}), 500
 
 

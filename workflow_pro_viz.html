@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="id" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alur Kerja PDDikti Dashboard</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        slate: { 850: '#151e2e', 900: '#0f172a', 950: '#020617' },
+                        brand: { 400: '#38bdf8', 500: '#0ea5e9', 600: '#0284c7' },
+                        accent: { 400: '#818cf8', 500: '#6366f1' },
+                        pink: { 400: '#f472b6', 500: '#ec4899' }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    boxShadow: {
+                        'neon': '0 0 20px rgba(56, 189, 248, 0.4)',
+                        'glass': '0 8px 32px 0 rgba(0, 0, 0, 0.37)'
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <!-- Google Fonts: Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- GSAP for Animations -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/MotionPathPlugin.min.js"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://cdn.jsdelivr.net/npm/lucide@latest/dist/umd/lucide.min.js"></script>
+
+    <style>
+        body {
+            background-color: #020617; /* Slate 950 */
+            color: #f8fafc;
+            overflow-x: hidden;
+            font-family: 'Inter', sans-serif;
+            background-image: 
+                radial-gradient(circle at 15% 50%, rgba(99, 102, 241, 0.15), transparent 25%),
+                radial-gradient(circle at 85% 30%, rgba(56, 189, 248, 0.15), transparent 25%);
+        }
+        
+        /* Grid Background Pattern */
+        .bg-grid {
+            position: fixed;
+            inset: 0;
+            background-image: 
+                linear-gradient(to right, rgba(255,255,255,0.03) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(255,255,255,0.03) 1px, transparent 1px);
+            background-size: 40px 40px;
+            pointer-events: none;
+            z-index: -1;
+        }
+
+        /* SVG Path animations */
+        .flow-path {
+            stroke-dasharray: 10 10;
+            animation: flowDash 20s linear infinite;
+        }
+        
+        @keyframes flowDash {
+            from { stroke-dashoffset: 200; }
+            to { stroke-dashoffset: 0; }
+        }
+
+        /* Glassmorphism Classes */
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.6);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        /* Node Hover Effects */
+        .node-card {
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            cursor: pointer;
+        }
+        .node-card:hover {
+            transform: translateY(-8px) scale(1.02);
+            box-shadow: 0 15px 30px rgba(0,0,0,0.4), 0 0 20px rgba(99, 102, 241, 0.3);
+            border-color: rgba(99, 102, 241, 0.5);
+        }
+        .node-icon-wrapper {
+            transition: all 0.3s ease;
+        }
+        .node-card:hover .node-icon-wrapper {
+            background: rgba(99, 102, 241, 0.2);
+            color: #818cf8;
+            transform: scale(1.1);
+        }
+
+        /* Side Panel Transition */
+        #side-panel {
+            transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+        }
+        .panel-hidden {
+            transform: translateX(100%);
+        }
+        .panel-visible {
+            transform: translateX(0);
+        }
+
+        /* Hide scrollbar for panel */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+</head>
+<body class="antialiased min-h-screen relative flex flex-col">
+
+    <div class="bg-grid"></div>
+
+    <!-- Header Section -->
+    <header class="w-full pt-10 pb-6 px-8 z-10 text-center lg:text-left flex flex-col lg:flex-row justify-between items-center max-w-7xl mx-auto">
+        <div>
+            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full glass-panel text-xs font-medium text-brand-400 mb-4 border border-brand-500/30">
+                <i data-lucide="map" class="w-3 h-3"></i> 
+                Panduan Pengguna
+            </div>
+            <h1 class="text-4xl md:text-5xl font-bold tracking-tight mb-2">
+                <span class="text-transparent bg-clip-text bg-gradient-to-r from-brand-400 to-accent-500">Bagaimana Aplikasi Bekerja?</span> 
+            </h1>
+            <p class="text-slate-400 max-w-2xl text-sm md:text-base">
+                Visualisasi langkah demi langkah proses pengambilan data dosen. Silakan klik pada setiap kotak di bawah ini untuk melihat penjelasan sederhana tentang apa yang dilakukan sistem secara otomatis untuk Anda.
+            </p>
+        </div>
+        <div class="mt-6 lg:mt-0 flex gap-4">
+            <button id="btn-simulate" class="glass-panel hover:bg-emerald-800/80 px-6 py-2.5 rounded-lg flex items-center gap-2 text-sm font-semibold transition-colors text-emerald-400 border-emerald-700/50">
+                <i data-lucide="play" class="w-4 h-4"></i> Mulai Simulasi
+            </button>
+            <button id="btn-replay" class="glass-panel hover:bg-slate-800/80 px-6 py-2.5 rounded-lg flex items-center gap-2 text-sm font-semibold transition-colors text-white border-slate-700">
+                <i data-lucide="rotate-ccw" class="w-4 h-4"></i> Ulangi
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Canvas Area -->
+    <main class="flex-1 relative w-full max-w-7xl mx-auto mt-4 mb-12 flex justify-center items-center min-h-[600px] overflow-hidden">
+        
+        <!-- SVG Connecting Paths -->
+        <svg class="absolute inset-0 w-full h-full pointer-events-none z-0" id="flow-svg" preserveAspectRatio="xMidYMid meet">
+            <defs>
+                <linearGradient id="lineGrad1" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.2"/>
+                    <stop offset="100%" stop-color="#818cf8" stop-opacity="0.8"/>
+                </linearGradient>
+                <linearGradient id="lineGrad2" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stop-color="#818cf8" stop-opacity="0.8"/>
+                    <stop offset="100%" stop-color="#10b981" stop-opacity="0.8"/>
+                </linearGradient>
+                <linearGradient id="lineGrad3" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stop-color="#10b981" stop-opacity="0.8"/>
+                    <stop offset="100%" stop-color="#f59e0b" stop-opacity="0.8"/>
+                </linearGradient>
+                <linearGradient id="lineGrad4" x1="100%" y1="0%" x2="0%" y2="0%">
+                    <stop offset="0%" stop-color="#f59e0b" stop-opacity="0.8"/>
+                    <stop offset="100%" stop-color="#f472b6" stop-opacity="0.8"/>
+                </linearGradient>
+                <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+                    <feGaussianBlur stdDeviation="3" result="blur" />
+                    <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                </filter>
+            </defs>
+            
+            <!-- Base faded paths -->
+            <path id="path1" d="M 0 0" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="3" />
+            <path id="path2" d="M 0 0" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="3" />
+            <path id="path3" d="M 0 0" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="3" />
+            <path id="path4" d="M 0 0" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="3" />
+            
+            <!-- Animated highlight paths -->
+            <path id="active-path1" d="M 0 0" fill="none" stroke="url(#lineGrad1)" stroke-width="3" class="flow-path opacity-0" />
+            <path id="active-path2" d="M 0 0" fill="none" stroke="url(#lineGrad2)" stroke-width="3" class="flow-path opacity-0" />
+            <path id="active-path3" d="M 0 0" fill="none" stroke="url(#lineGrad3)" stroke-width="3" class="flow-path opacity-0" />
+            <path id="active-path4" d="M 0 0" fill="none" stroke="url(#lineGrad4)" stroke-width="3" class="flow-path opacity-0" />
+
+            <!-- Glowing Packets -->
+            <circle id="packet1" cx="0" cy="0" r="4" fill="#fff" filter="url(#glow)" class="opacity-0" />
+            <circle id="packet2" cx="0" cy="0" r="4" fill="#fff" filter="url(#glow)" class="opacity-0" />
+            <circle id="packet3" cx="0" cy="0" r="4" fill="#glow)" class="opacity-0" />
+            <circle id="packet4" cx="0" cy="0" r="4" fill="#fff" filter="url(#glow)" class="opacity-0" />
+        </svg>
+
+        <!-- Nodes Container (CSS Grid for Positioning) -->
+        <div class="absolute inset-0 w-full h-full pointer-events-none">
+            
+            <!-- Node 1: Initialization -->
+            <div class="absolute top-[80px] left-[50px] w-[260px] pointer-events-auto" data-step="init">
+                <div class="node-card glass-panel rounded-xl p-5 border border-slate-700 shadow-lg relative group">
+                    <div class="absolute -top-3 -right-3 w-8 h-8 rounded-full bg-slate-800 border border-slate-600 flex items-center justify-center text-xs font-bold text-slate-300 z-10">01</div>
+                    <div class="node-icon-wrapper w-12 h-12 rounded-lg bg-slate-800/50 flex items-center justify-center text-slate-400 mb-4 border border-slate-700/50">
+                        <i data-lucide="cog" class="w-6 h-6"></i>
+                    </div>
+                    <h3 class="text-lg font-semibold text-white mb-1 group-hover:text-brand-400 transition-colors">Persiapan Otomatis</h3>
+                    <p class="text-xs text-slate-400 leading-relaxed">Sistem menyiapkan koneksi dan memperbarui jadwal tahun ajaran secara otomatis.</p>
+                </div>
+            </div>
+
+            <!-- Node 2: Search Prodi -->
+            <div class="absolute top-[80px] left-[400px] w-[260px] pointer-events-auto" data-step="search">
+                <div class="node-card glass-panel rounded-xl p-5 border border-slate-700 shadow-lg relative group">
+                    <div class="absolute -top-3 -right-3 w-8 h-8 rounded-full bg-slate-800 border border-slate-600 flex items-center justify-center text-xs font-bold text-slate-300 z-10">02</div>
+                    <div class="node-icon-wrapper w-12 h-12 rounded-lg bg-slate-800/50 flex items-center justify-center text-slate-400 mb-4 border border-slate-700/50">
+                        <i data-lucide="search" class="w-6 h-6"></i>
+                    </div>
+                    <h3 class="text-lg font-semibold text-white mb-1 group-hover:text-accent-400 transition-colors">Pencarian Pintar</h3>
+                    <p class="text-xs text-slate-400 leading-relaxed">Mencari nama kampus/jurusan dengan fitur koreksi otomatis jika ada salah ketik.</p>
+                </div>
+            </div>
+
+            <!-- Node 3: Fetch Dosen -->
+            <div class="absolute top-[80px] left-[750px] w-[260px] pointer-events-auto" data-step="fetch">
+                <div class="node-card glass-panel rounded-xl p-5 border border-slate-700 shadow-lg relative group">
+                    <div class="absolute -top-3 -right-3 w-8 h-8 rounded-full bg-slate-800 border border-slate-600 flex items-center justify-center text-xs font-bold text-slate-300 z-10">03</div>
+                    <div class="node-icon-wrapper w-12 h-12 rounded-lg bg-slate-800/50 flex items-center justify-center text-slate-400 mb-4 border border-slate-700/50">
+                        <i data-lucide="users" class="w-6 h-6"></i>
+                    </div>
+                    <h3 class="text-lg font-semibold text-white mb-1 group-hover:text-emerald-400 transition-colors">Pengumpulan Data</h3>
+                    <p class="text-xs text-slate-400 leading-relaxed">Menarik seluruh nama dosen, lalu menyaring otomatis agar tidak ada data yang ganda.</p>
+                </div>
+            </div>
+
+            <!-- Node 4: Profiling & Export -->
+            <div class="absolute top-[380px] left-[750px] w-[260px] pointer-events-auto" data-step="export">
+                <div class="node-card glass-panel rounded-xl p-5 border border-slate-700 shadow-lg relative group">
+                    <div class="absolute -top-3 -right-3 w-8 h-8 rounded-full bg-slate-800 border border-slate-600 flex items-center justify-center text-xs font-bold text-slate-300 z-10">04</div>
+                    <div class="node-icon-wrapper w-12 h-12 rounded-lg bg-slate-800/50 flex items-center justify-center text-slate-400 mb-4 border border-slate-700/50">
+                        <i data-lucide="file-spreadsheet" class="w-6 h-6"></i>
+                    </div>
+                    <h3 class="text-lg font-semibold text-white mb-1 group-hover:text-amber-400 transition-colors">Penyusunan Laporan</h3>
+                    <p class="text-xs text-slate-400 leading-relaxed">Merangkum ribuan profil ke dalam tabel Excel yang rapi, berwana, dan siap cetak.</p>
+                </div>
+            </div>
+
+            <!-- Node 5: Analytics & UX -->
+            <div class="absolute top-[380px] left-[400px] w-[260px] pointer-events-auto" data-step="analytics">
+                <div class="node-card glass-panel rounded-xl p-5 border border-slate-700 shadow-lg relative group">
+                    <div class="absolute -top-3 -right-3 w-8 h-8 rounded-full bg-slate-800 border border-slate-600 flex items-center justify-center text-xs font-bold text-slate-300 z-10">05</div>
+                    <div class="node-icon-wrapper w-12 h-12 rounded-lg bg-slate-800/50 flex items-center justify-center text-slate-400 mb-4 border border-slate-700/50">
+                        <i data-lucide="pie-chart" class="w-6 h-6"></i>
+                    </div>
+                    <h3 class="text-lg font-semibold text-white mb-1 group-hover:text-pink-400 transition-colors">Visualisasi Interaktif</h3>
+                    <p class="text-xs text-slate-400 leading-relaxed">Mengubah angka-angka tabel menjadi diagram grafik yang cantik dan mudah dibaca.</p>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- Simulation Terminal (Hidden by default) -->
+    <div id="sim-terminal" class="fixed top-32 right-8 w-full max-w-[420px] z-40 glass-panel border border-slate-700/50 shadow-2xl rounded-xl overflow-hidden flex flex-col transition-all duration-500 ease-in-out opacity-0 pointer-events-none transform translate-x-8">
+        <div class="bg-slate-900/80 px-4 py-2 border-b border-slate-700/50 flex items-center gap-2">
+            <div class="w-3 h-3 rounded-full bg-red-500"></div>
+            <div class="w-3 h-3 rounded-full bg-yellow-500"></div>
+            <div class="w-3 h-3 rounded-full bg-green-500"></div>
+            <span class="ml-2 text-xs text-slate-400 font-mono tracking-wider">Log Pemrosesan Sistem</span>
+            <button id="btn-close-sim" class="ml-auto text-slate-400 hover:text-white">
+                <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+        </div>
+        <div class="p-4 h-80 overflow-y-auto font-mono text-sm text-slate-300 bg-black/40" id="sim-log">
+            <!-- Logs injected here -->
+        </div>
+    </div>
+
+    <!-- Side Panel (Hidden by default) -->
+    <div id="side-panel" class="fixed top-0 right-0 h-full w-full sm:w-[450px] z-50 panel-hidden glass-panel border-l border-slate-700/50 shadow-2xl flex flex-col">
+        <div class="p-6 border-b border-slate-700/50 flex justify-between items-center bg-slate-900/50">
+            <div class="flex items-center gap-3">
+                <div id="sp-icon" class="w-10 h-10 rounded-lg bg-brand-500/20 text-brand-400 flex items-center justify-center">
+                    <i data-lucide="info" class="w-5 h-5"></i>
+                </div>
+                <h2 id="sp-title" class="text-xl font-bold text-white">Detail</h2>
+            </div>
+            <button id="btn-close-panel" class="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+        </div>
+        
+        <div class="p-6 flex-1 overflow-y-auto no-scrollbar" id="sp-content">
+            <!-- Content injected via JS -->
+        </div>
+    </div>
+
+    <!-- Data Definitions for Panels -->
+    <script>
+        const nodeData = {
+            'init': {
+                title: 'Persiapan Sistem Otomatis',
+                icon: 'cog',
+                color: 'text-brand-400',
+                bgColor: 'bg-brand-500/20',
+                content: `
+                    <p class="text-slate-300 text-sm leading-relaxed mb-6">Sebelum memulai pencarian, aplikasi ini seperti asisten yang merapikan meja kerjanya. Sistem akan memastikan semuanya mutakhir agar tidak ada data yang terlewat.</p>
+                    <div class="space-y-4">
+                        <div class="p-4 rounded-xl bg-slate-800/40 border border-slate-700/50">
+                            <h4 class="text-white font-semibold text-sm flex items-center gap-2 mb-2">
+                                <i data-lucide="refresh-cw" class="w-4 h-4 text-brand-400"></i> Sinkronisasi Kampus
+                            </h4>
+                            <p class="text-xs text-slate-400">Sistem akan mengecek daftar kampus terbaru (misalnya universitas negeri dan agama) agar aplikasi selalu tahu jika ada kampus baru atau yang berganti nama.</p>
+                        </div>
+                        <div class="p-4 rounded-xl bg-slate-800/40 border border-slate-700/50">
+                            <h4 class="text-white font-semibold text-sm flex items-center gap-2 mb-2">
+                                <i data-lucide="calendar-clock" class="w-4 h-4 text-brand-400"></i> Deteksi Semester Pintar
+                            </h4>
+                            <p class="text-xs text-slate-400">Aplikasi akan menghitung otomatis apakah saat ini sedang semester Ganjil atau Genap, memastikan data dosen yang diambil adalah data yang paling terkini.</p>
+                        </div>
+                        <div class="p-4 rounded-xl bg-slate-800/40 border border-slate-700/50">
+                            <h4 class="text-white font-semibold text-sm flex items-center gap-2 mb-2">
+                                <i data-lucide="shield" class="w-4 h-4 text-brand-400"></i> Jembatan Anti-Putus
+                            </h4>
+                            <p class="text-xs text-slate-400">Membangun jalur internet khusus yang stabil. Jika tiba-tiba koneksi lambat, sistem tidak akan menyerah melainkan akan mencoba ulang secara otomatis.</p>
+                        </div>
+                    </div>
+                `
+            },
+            'search': {
+                title: 'Pencarian Kampus & Jurusan',
+                icon: 'search',
+                color: 'text-accent-400',
+                bgColor: 'bg-accent-500/20',
+                content: `
+                    <p class="text-slate-300 text-sm leading-relaxed mb-6">Proses ini seperti "Google" khusus untuk pendidikan, tapi dengan kecerdasan ekstra untuk mengatasi salah ketik dan perbedaan penamaan.</p>
+                    <div class="space-y-4">
+                        <div class="p-4 rounded-xl bg-slate-800/40 border border-slate-700/50">
+                            <h4 class="text-white font-semibold text-sm flex items-center gap-2 mb-2">
+                                <i data-lucide="spell-check" class="w-4 h-4 text-accent-400"></i> Perbaikan Salah Ketik
+                            </h4>
+                            <p class="text-xs text-slate-400">Jika ada jurusan bernama "Syari'ah" dan dicari dengan ketikan "Syariah", sistem secara ajaib akan langsung menyamakannya sehingga data tetap ditemukan.</p>
+                        </div>
+                        <div class="p-4 rounded-xl bg-slate-800/40 border border-slate-700/50">
+                            <h4 class="text-white font-semibold text-sm flex items-center gap-2 mb-2">
+                                <i data-lucide="corner-down-right" class="w-4 h-4 text-accent-400"></i> Pencarian Mendalam
+                            </h4>
+                            <p class="text-xs text-slate-400">Terkadang nama jurusan di sistem pusat terlalu panjang. Jika pencarian pertama gagal, sistem akan menebak dengan memotong nama jurusan sampai akhirnya berhasil ditemukan.</p>
+                        </div>
+                        <div class="p-4 rounded-xl bg-slate-800/40 border border-slate-700/50">
+                            <h4 class="text-white font-semibold text-sm flex items-center gap-2 mb-2">
+                                <i data-lucide="building-2" class="w-4 h-4 text-accent-400"></i> Pengelompokan Institusi
+                            </h4>
+                            <p class="text-xs text-slate-400">Secara otomatis mendeteksi apakah kampus tersebut masuk ke dalam pengawasan Kementerian Agama (DIKTIS) atau Kemdikbud (DIKTI).</p>
+                        </div>
+                    </div>
+                `
+            },
+            'fetch': {
+                title: 'Pengumpulan Data Dosen',
+                icon: 'users',
+                color: 'text-emerald-400',
+                bgColor: 'bg-emerald-500/20',
+                content: `
+                    <p class="text-slate-300 text-sm leading-relaxed mb-6">Setelah kampusnya ketemu, aplikasi ini mulai mengumpulkan nama-nama dosen, namun dengan saringan khusus agar angkanya akurat.</p>
+                    <div class="space-y-4">
+                        <div class="p-4 rounded-xl bg-slate-800/40 border border-slate-700/50">
+                            <h4 class="text-white font-semibold text-sm flex items-center gap-2 mb-2">
+                                <i data-lucide="filter" class="w-4 h-4 text-emerald-400"></i> Hapus Data Ganda (Dobel)
+                            </h4>
+                            <p class="text-xs text-slate-400">Seringkali satu dosen mengajar di banyak tempat. Aplikasi secara cerdas menyaring data tersebut sehingga nama dosen tidak akan masuk dua kali di laporan Excel.</p>
+                        </div>
+                        <div class="p-4 rounded-xl bg-slate-800/40 border border-slate-700/50">
+                            <h4 class="text-white font-semibold text-sm flex items-center gap-2 mb-2">
+                                <i data-lucide="history" class="w-4 h-4 text-emerald-400"></i> Cari ke Masa Lalu
+                            </h4>
+                            <p class="text-xs text-slate-400">Kalau semester ini kampus belum melapor (sehingga datanya kosong), aplikasi secara otomatis akan melihat ke arsip semester tahun-tahun sebelumnya agar laporannya tidak kosong.</p>
+                        </div>
+                    </div>
+                `
+            },
+            'export': {
+                title: 'Penyusunan Laporan Excel',
+                icon: 'file-spreadsheet',
+                color: 'text-amber-400',
+                bgColor: 'bg-amber-500/20',
+                content: `
+                    <p class="text-slate-300 text-sm leading-relaxed mb-6">Tahap di mana sistem menyalin ribuan informasi secara kilat, dan menuliskannya ke dalam satu file Excel cantik yang siap pakai.</p>
+                    <div class="space-y-4">
+                        <div class="p-4 rounded-xl bg-slate-800/40 border border-slate-700/50">
+                            <h4 class="text-white font-semibold text-sm flex items-center gap-2 mb-2">
+                                <i data-lucide="zap" class="w-4 h-4 text-amber-400"></i> Bekerja Secara Paralel (Super Cepat)
+                            </h4>
+                            <p class="text-xs text-slate-400">Alih-alih mengambil data dosen satu per satu (yang bisa memakan waktu berjam-jam), sistem memecah tugasnya menjadi beberapa "jalur" sekaligus agar pengunduhan 5 kali lebih cepat.</p>
+                        </div>
+                        <div class="p-4 rounded-xl bg-slate-800/40 border border-slate-700/50">
+                            <h4 class="text-white font-semibold text-sm flex items-center gap-2 mb-2">
+                                <i data-lucide="check-square" class="w-4 h-4 text-amber-400"></i> Mencocokkan KTP Digital
+                            </h4>
+                            <p class="text-xs text-slate-400">Sistem selalu memeriksa ulang nomor identitas dosen (seperti Nomor KTP/NIDN) untuk memastikan profil riwayat hidup yang diambil tidak salah orang (apalagi jika namanya pasaran).</p>
+                        </div>
+                        <div class="p-4 rounded-xl bg-slate-800/40 border border-slate-700/50">
+                            <h4 class="text-white font-semibold text-sm flex items-center gap-2 mb-2">
+                                <i data-lucide="table" class="w-4 h-4 text-amber-400"></i> Desain Excel Otomatis
+                            </h4>
+                            <p class="text-xs text-slate-400">Tidak perlu capek-capek mengatur warna tabel atau merapikan lebar kolom di Excel. File yang dihasilkan sudah diformat otomatis menyerupai tabel buku kas profesional.</p>
+                        </div>
+                    </div>
+                `
+            },
+            'analytics': {
+                title: 'Visualisasi Interaktif (Dashboard)',
+                icon: 'pie-chart',
+                color: 'text-pink-400',
+                bgColor: 'bg-pink-500/20',
+                content: `
+                    <p class="text-slate-300 text-sm leading-relaxed mb-6">Sistem canggih yang mengubah data Excel membosankan menjadi grafik berwarna-warni yang enak dilihat secara instan.</p>
+                    <div class="space-y-4">
+                        <div class="p-4 rounded-xl bg-slate-800/40 border border-slate-700/50">
+                            <h4 class="text-white font-semibold text-sm flex items-center gap-2 mb-2">
+                                <i data-lucide="bar-chart-3" class="w-4 h-4 text-pink-400"></i> Diagram Modern & Estetik
+                            </h4>
+                            <p class="text-xs text-slate-400">Ribuan data disulap menjadi diagram lingkaran dan diagram batang. Anda bisa langsung melihat persentase Dosen Perempuan, Dosen S3, hingga proporsi Akreditasi dalam sekali lirik.</p>
+                        </div>
+                        <div class="p-4 rounded-xl bg-slate-800/40 border border-slate-700/50">
+                            <h4 class="text-white font-semibold text-sm flex items-center gap-2 mb-2">
+                                <i data-lucide="wand-2" class="w-4 h-4 text-pink-400"></i> Pembersihan Data "Bongkok"
+                            </h4>
+                            <p class="text-xs text-slate-400">Seringkali di laporan Excel ada sel yang kosong melompong. Dasbor ini akan secara otomatis mengubahnya menjadi keterangan profesional, seperti "Tidak Diketahui" atau "Belum Lapor".</p>
+                        </div>
+                        <div class="p-4 rounded-xl bg-slate-800/40 border border-slate-700/50">
+                            <h4 class="text-white font-semibold text-sm flex items-center gap-2 mb-2">
+                                <i data-lucide="monitor-play" class="w-4 h-4 text-pink-400"></i> Animasi Transisi Halus
+                            </h4>
+                            <p class="text-xs text-slate-400">Memberikan Anda kesan aplikasi premium. Selagi menunggu grafik muncul, akan ada animasi pemuatan data (loading) yang cantik untuk menemani layar Anda.</p>
+                        </div>
+                    </div>
+                `
+            }
+        };
+
+        // Initialize Lucide Icons
+        try {
+            lucide.createIcons();
+        } catch(e) {
+            console.warn("Lucide CDN blocked or failed:", e);
+        }
+
+        // Register GSAP Plugin
+        try {
+            gsap.registerPlugin(MotionPathPlugin);
+        } catch(e) {
+            console.error("GSAP Plugin failed:", e);
+        }
+
+        // Core Animation Sequence
+        let masterTimeline;
+
+        function addLog(html) {
+            const logDiv = document.getElementById('sim-log');
+            const entry = document.createElement('div');
+            entry.className = 'mb-1 opacity-0';
+            entry.innerHTML = `<span class="text-emerald-500 mr-2">❯</span> ${html}`;
+            logDiv.appendChild(entry);
+            gsap.to(entry, {opacity: 1, duration: 0.3});
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        function playAnimation(isSimulation = false) {
+            if (masterTimeline) masterTimeline.kill();
+            
+            if (isSimulation) {
+                const term = document.getElementById('sim-terminal');
+                document.getElementById('sim-log').innerHTML = '';
+                gsap.to(term, { opacity: 1, x: 0, duration: 0.5, pointerEvents: 'auto' });
+            }
+            
+            // Reset states
+            gsap.set(['#active-path1', '#active-path2', '#active-path3', '#active-path4'], { opacity: 0 });
+            gsap.set('.node-card', { filter: 'grayscale(60%)', opacity: 0.7, borderColor: 'rgba(255,255,255,0.08)' });
+            gsap.set(['#packet1', '#packet2', '#packet3', '#packet4'], { opacity: 0 });
+
+            masterTimeline = gsap.timeline();
+
+            // Node 1 Highlight
+            if (isSimulation) masterTimeline.call(addLog, ['<span class="text-brand-400 font-bold">Langkah 1:</span> Mempersiapkan koneksi & jadwal terbaru...'], 0.1);
+            masterTimeline.to('.node-card', { duration: 0.5, opacity: 1, filter: 'grayscale(0%)' }, 0);
+            masterTimeline.to('[data-step="init"] .node-card', { duration: 0.4, borderColor: '#38bdf8', boxShadow: '0 0 20px rgba(56, 189, 248, 0.4)' }, 0.5);
+
+            // Path 1 & Packet 1
+            if (isSimulation) masterTimeline.call(addLog, ['<span class="text-slate-400">[Siap] Daftar kampus berhasil disegarkan.</span>'], 1.2);
+            masterTimeline.to('#active-path1', { opacity: 1, duration: 0.2 }, 1.5);
+            masterTimeline.to('#packet1', { opacity: 1, duration: 0.2 }, 1.5);
+            masterTimeline.to('#packet1', {
+                duration: 1.5,
+                ease: "power1.inOut",
+                motionPath: {
+                    path: "#path1",
+                    align: "#path1",
+                    alignOrigin: [0.5, 0.5]
+                }
+            }, 1.5);
+            
+            // Node 2 Highlight
+            if (isSimulation) masterTimeline.call(addLog, ['<span class="text-accent-400 font-bold">Langkah 2:</span> Mencari nama kampus & jurusan yang Anda ketik...'], 3.1);
+            masterTimeline.to('#packet1', { opacity: 0, duration: 0.2 }, 3.0);
+            masterTimeline.to('[data-step="init"] .node-card', { borderColor: 'rgba(255,255,255,0.08)', boxShadow: 'none' }, 3.0);
+            masterTimeline.to('[data-step="search"] .node-card', { duration: 0.4, borderColor: '#818cf8', boxShadow: '0 0 20px rgba(129, 140, 248, 0.4)' }, 3.0);
+
+            // Path 2 & Packet 2
+            if (isSimulation) masterTimeline.call(addLog, ['<span class="text-emerald-400">[Ketemu]</span> Jurusan "Pendidikan Agama Islam" ditemukan!'], 4.2);
+            masterTimeline.to('#active-path2', { opacity: 1, duration: 0.2 }, 4.0);
+            masterTimeline.to('#packet2', { opacity: 1, duration: 0.2 }, 4.0);
+            masterTimeline.to('#packet2', {
+                duration: 1.5,
+                ease: "power1.inOut",
+                motionPath: {
+                    path: "#path2",
+                    align: "#path2",
+                    alignOrigin: [0.5, 0.5]
+                }
+            }, 4.0);
+
+            // Node 3 Highlight
+            if (isSimulation) masterTimeline.call(addLog, ['<span class="text-emerald-400 font-bold">Langkah 3:</span> Mengumpulkan nama semua dosen pengajar...'], 5.6);
+            masterTimeline.to('#packet2', { opacity: 0, duration: 0.2 }, 5.5);
+            masterTimeline.to('[data-step="search"] .node-card', { borderColor: 'rgba(255,255,255,0.08)', boxShadow: 'none' }, 5.5);
+            masterTimeline.to('[data-step="fetch"] .node-card', { duration: 0.4, borderColor: '#10b981', boxShadow: '0 0 20px rgba(16, 185, 129, 0.4)' }, 5.5);
+
+            // Path 3 & Packet 3
+            if (isSimulation) masterTimeline.call(addLog, ['<span class="text-slate-400">[Info]</span> 30 Dosen terdaftar. Menghapus data yang dobel...'], 6.7);
+            masterTimeline.to('#active-path3', { opacity: 1, duration: 0.2 }, 6.5);
+            masterTimeline.to('#packet3', { opacity: 1, duration: 0.2 }, 6.5);
+            masterTimeline.to('#packet3', {
+                duration: 1.5,
+                ease: "power1.inOut",
+                motionPath: {
+                    path: "#path3",
+                    align: "#path3",
+                    alignOrigin: [0.5, 0.5]
+                }
+            }, 6.5);
+
+            // Node 4 Highlight
+            if (isSimulation) masterTimeline.call(addLog, ['<span class="text-amber-400 font-bold">Langkah 4:</span> Merangkum riwayat profil dan menyusun ke Excel...'], 8.1);
+            masterTimeline.to('#packet3', { opacity: 0, duration: 0.2 }, 8.0);
+            masterTimeline.to('[data-step="fetch"] .node-card', { borderColor: 'rgba(255,255,255,0.08)', boxShadow: 'none' }, 8.0);
+            masterTimeline.to('[data-step="export"] .node-card', { duration: 0.4, borderColor: '#f59e0b', boxShadow: '0 0 20px rgba(245, 158, 11, 0.4)' }, 8.0);
+            
+            // Path 4 & Packet 4
+            if (isSimulation) masterTimeline.call(addLog, ['<span class="text-pink-400">[Berhasil]</span> Laporan Excel sudah jadi dan diformat rapi!'], 9.2);
+            masterTimeline.to('#active-path4', { opacity: 1, duration: 0.2 }, 9.0);
+            masterTimeline.to('#packet4', { opacity: 1, duration: 0.2 }, 9.0);
+            masterTimeline.to('#packet4', {
+                duration: 1.5,
+                ease: "power1.inOut",
+                motionPath: {
+                    path: "#path4",
+                    align: "#path4",
+                    alignOrigin: [0.5, 0.5]
+                }
+            }, 9.0);
+            
+            // Node 5 Highlight
+            if (isSimulation) masterTimeline.call(addLog, ['<span class="text-pink-400 font-bold">Langkah 5:</span> Menyiapkan presentasi grafik interaktif (Dashboard)...'], 10.6);
+            masterTimeline.to('#packet4', { opacity: 0, duration: 0.2 }, 10.5);
+            masterTimeline.to('[data-step="export"] .node-card', { borderColor: 'rgba(255,255,255,0.08)', boxShadow: 'none' }, 10.5);
+            masterTimeline.to('[data-step="analytics"] .node-card', { duration: 0.4, borderColor: '#ec4899', boxShadow: '0 0 20px rgba(236, 72, 153, 0.4)' }, 10.5);
+
+            // Final state
+            if (isSimulation) masterTimeline.call(addLog, ['<span class="text-emerald-400 font-bold">[Selesai]</span> Seluruh data siap Anda nikmati di layar! 🎉'], 11.5);
+            masterTimeline.to('[data-step="analytics"] .node-card', { borderColor: 'rgba(255,255,255,0.08)', boxShadow: 'none', delay: 1.5 });
+        }
+
+        // Side Panel Logic
+        const sidePanel = document.getElementById('side-panel');
+        const spIconWrapper = document.getElementById('sp-icon');
+        const spTitle = document.getElementById('sp-title');
+        const spContent = document.getElementById('sp-content');
+        
+        document.querySelectorAll('.node-card').forEach(card => {
+            card.addEventListener('click', function() {
+                const step = this.parentElement.getAttribute('data-step');
+                const data = nodeData[step];
+                
+                // Update Panel Content
+                spTitle.textContent = data.title;
+                spIconWrapper.className = `w-10 h-10 rounded-lg ${data.bgColor} ${data.color} flex items-center justify-center`;
+                spIconWrapper.innerHTML = `<i data-lucide="${data.icon}" class="w-5 h-5"></i>`;
+                spContent.innerHTML = data.content;
+                try {
+                    lucide.createIcons();
+                } catch(e) { console.warn("Lucide icons failed to load:", e); }
+
+                // Show Panel
+                sidePanel.classList.remove('panel-hidden');
+                sidePanel.classList.add('panel-visible');
+            });
+        });
+
+        document.getElementById('btn-close-panel').addEventListener('click', () => {
+            sidePanel.classList.remove('panel-visible');
+            sidePanel.classList.add('panel-hidden');
+        });
+
+        document.getElementById('btn-replay').addEventListener('click', () => playAnimation(false));
+        document.getElementById('btn-simulate').addEventListener('click', () => playAnimation(true));
+        document.getElementById('btn-close-sim').addEventListener('click', () => {
+            gsap.to('#sim-terminal', { opacity: 0, x: 32, duration: 0.3, pointerEvents: 'none' });
+        });
+
+        // Start animation on load
+        window.addEventListener('load', () => {
+            // Draw responsive SVG paths based on actual node positions
+            function updatePaths() {
+                const init = document.querySelector('[data-step="init"]').getBoundingClientRect();
+                const search = document.querySelector('[data-step="search"]').getBoundingClientRect();
+                const fetch = document.querySelector('[data-step="fetch"]').getBoundingClientRect();
+                const exp = document.querySelector('[data-step="export"]').getBoundingClientRect();
+                const analytics = document.querySelector('[data-step="analytics"]').getBoundingClientRect();
+                const svg = document.getElementById('flow-svg').getBoundingClientRect();
+                
+                // Calculate centers relative to SVG container
+                const pInitOut = { x: init.left - svg.left + init.width, y: init.top - svg.top + init.height/2 };
+                const pSearchIn = { x: search.left - svg.left, y: search.top - svg.top + search.height/2 };
+                
+                const pSearchOut = { x: search.left - svg.left + search.width, y: search.top - svg.top + search.height/2 };
+                const pFetchIn = { x: fetch.left - svg.left, y: fetch.top - svg.top + fetch.height/2 };
+                
+                const pFetchOut = { x: fetch.left - svg.left + fetch.width/2, y: fetch.top - svg.top + fetch.height };
+                const pExpIn = { x: exp.left - svg.left + exp.width/2, y: exp.top - svg.top };
+                
+                const pExpOut = { x: exp.left - svg.left, y: exp.top - svg.top + exp.height/2 };
+                const pAnalyticsIn = { x: analytics.left - svg.left + analytics.width, y: analytics.top - svg.top + analytics.height/2 };
+
+                document.getElementById('path1').setAttribute('d', `M ${pInitOut.x} ${pInitOut.y} L ${pSearchIn.x} ${pSearchIn.y}`);
+                document.getElementById('active-path1').setAttribute('d', `M ${pInitOut.x} ${pInitOut.y} L ${pSearchIn.x} ${pSearchIn.y}`);
+                
+                document.getElementById('path2').setAttribute('d', `M ${pSearchOut.x} ${pSearchOut.y} L ${pFetchIn.x} ${pFetchIn.y}`);
+                document.getElementById('active-path2').setAttribute('d', `M ${pSearchOut.x} ${pSearchOut.y} L ${pFetchIn.x} ${pFetchIn.y}`);
+
+                // Curved path from Fetch to Exp (downwards)
+                document.getElementById('path3').setAttribute('d', `M ${pFetchOut.x} ${pFetchOut.y} C ${pFetchOut.x} ${pFetchOut.y + 100}, ${pExpIn.x} ${pExpIn.y - 100}, ${pExpIn.x} ${pExpIn.y}`);
+                document.getElementById('active-path3').setAttribute('d', `M ${pFetchOut.x} ${pFetchOut.y} C ${pFetchOut.x} ${pFetchOut.y + 100}, ${pExpIn.x} ${pExpIn.y - 100}, ${pExpIn.x} ${pExpIn.y}`);
+                
+                document.getElementById('path4').setAttribute('d', `M ${pExpOut.x} ${pExpOut.y} L ${pAnalyticsIn.x} ${pAnalyticsIn.y}`);
+                document.getElementById('active-path4').setAttribute('d', `M ${pExpOut.x} ${pExpOut.y} L ${pAnalyticsIn.x} ${pAnalyticsIn.y}`);
+            }
+
+            // Small timeout to ensure DOM is fully rendered
+            setTimeout(() => {
+                updatePaths();
+                playAnimation();
+            }, 100);
+
+            // Update on resize
+            window.addEventListener('resize', updatePaths);
+        });
+
+    </script>
+</body>
+</html>
